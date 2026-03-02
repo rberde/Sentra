@@ -1,0 +1,3 @@
+{
+  "/api/plaid/investments/route": "app/api/plaid/investments/route.js"
+}

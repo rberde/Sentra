@@ -1,0 +1,3 @@
+{
+  "/api/plaid/create-link-token/route": "app/api/plaid/create-link-token/route.js"
+}

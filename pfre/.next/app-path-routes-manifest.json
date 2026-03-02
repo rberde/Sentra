@@ -1,0 +1,17 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/chat/route": "/api/chat",
+  "/api/monitor/drift/route": "/api/monitor/drift",
+  "/api/monitor/liquidity/route": "/api/monitor/liquidity",
+  "/api/monitor/reallocation/route": "/api/monitor/reallocation",
+  "/api/monitor/spending/route": "/api/monitor/spending",
+  "/api/notifications/checkin/route": "/api/notifications/checkin",
+  "/api/plaid/autofill/route": "/api/plaid/autofill",
+  "/api/plaid/create-link-token/route": "/api/plaid/create-link-token",
+  "/api/plaid/exchange-token/route": "/api/plaid/exchange-token",
+  "/api/plaid/investments/route": "/api/plaid/investments",
+  "/api/plaid/sandbox-token/route": "/api/plaid/sandbox-token",
+  "/favicon.ico/route": "/favicon.ico",
+  "/page": "/"
+}

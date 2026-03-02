@@ -1,0 +1,12 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/plaid/exchange-token/route.js")
+R.c("server/chunks/node_modules_next_1c5075af._.js")
+R.c("server/chunks/node_modules_@opentelemetry_api_build_esm_7e8f41ca._.js")
+R.c("server/chunks/464b8_mime-db_78a234b4._.js")
+R.c("server/chunks/node_modules_axios_dist_node_axios_cjs_ef84af05._.js")
+R.c("server/chunks/node_modules_plaid_dist_api_da7723ba.js")
+R.c("server/chunks/node_modules_plaid_dist_ad44e3e5._.js")
+R.c("server/chunks/node_modules_491be960._.js")
+R.c("server/chunks/[root-of-the-server]__190c94a1._.js")
+R.c("server/chunks/_next-internal_server_app_api_plaid_exchange-token_route_actions_e5225dd7.js")
+R.m("[project]/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/src/app/api/plaid/exchange-token/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)")
+module.exports=R.m("[project]/node_modules/next/dist/esm/build/templates/app-route.js { INNER_APP_ROUTE => \"[project]/src/app/api/plaid/exchange-token/route.ts [app-route] (ecmascript)\" } [app-route] (ecmascript)").exports

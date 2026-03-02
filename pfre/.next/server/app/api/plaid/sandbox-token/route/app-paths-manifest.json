@@ -1,0 +1,3 @@
+{
+  "/api/plaid/sandbox-token/route": "app/api/plaid/sandbox-token/route.js"
+}

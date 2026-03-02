@@ -1,0 +1,443 @@
+{
+  "seed": "pfre-demo-seed-v1",
+  "override_accounts": [
+    {
+      "type": "depository",
+      "subtype": "checking",
+      "starting_balance": 4250,
+      "meta": {
+        "name": "Primary Checking",
+        "official_name": "Everyday Checking Account",
+        "mask": "4829"
+      },
+      "numbers": {
+        "account": "1234567890",
+        "ach_routing": "021000021"
+      },
+      "identity": {
+        "names": ["Raveenah Berde"],
+        "phone_numbers": [
+          { "primary": true, "type": "mobile", "data": "4165551234" }
+        ],
+        "emails": [
+          { "primary": true, "type": "primary", "data": "raveenah.b@example.com" }
+        ],
+        "addresses": [
+          {
+            "primary": true,
+            "data": {
+              "city": "Toronto",
+              "region": "ON",
+              "street": "180 University Ave, Unit 2205",
+              "postal_code": "M5H 0A3",
+              "country": "CA"
+            }
+          }
+        ]
+      },
+      "transactions": [
+        { "date_transacted": "2026-02-01", "date_posted": "2026-02-01", "currency": "USD", "amount": 1950, "description": "Rent Payment - 180 University Ave" },
+        { "date_transacted": "2026-01-01", "date_posted": "2026-01-01", "currency": "USD", "amount": 1950, "description": "Rent Payment - 180 University Ave" },
+        { "date_transacted": "2025-12-01", "date_posted": "2025-12-01", "currency": "USD", "amount": 1950, "description": "Rent Payment - 180 University Ave" },
+
+        { "date_transacted": "2026-02-03", "date_posted": "2026-02-03", "currency": "USD", "amount": 95.42, "description": "Hydro One - Electricity Bill" },
+        { "date_transacted": "2026-01-05", "date_posted": "2026-01-05", "currency": "USD", "amount": 112.30, "description": "Hydro One - Electricity Bill" },
+        { "date_transacted": "2025-12-04", "date_posted": "2025-12-04", "currency": "USD", "amount": 88.15, "description": "Hydro One - Electricity Bill" },
+
+        { "date_transacted": "2026-02-05", "date_posted": "2026-02-05", "currency": "USD", "amount": 65.00, "description": "Rogers Internet - Monthly" },
+        { "date_transacted": "2026-01-05", "date_posted": "2026-01-05", "currency": "USD", "amount": 65.00, "description": "Rogers Internet - Monthly" },
+        { "date_transacted": "2025-12-05", "date_posted": "2025-12-05", "currency": "USD", "amount": 65.00, "description": "Rogers Internet - Monthly" },
+
+        { "date_transacted": "2026-02-08", "date_posted": "2026-02-08", "currency": "USD", "amount": 55.00, "description": "Koodo Mobile - Monthly Plan" },
+        { "date_transacted": "2026-01-08", "date_posted": "2026-01-08", "currency": "USD", "amount": 55.00, "description": "Koodo Mobile - Monthly Plan" },
+        { "date_transacted": "2025-12-08", "date_posted": "2025-12-08", "currency": "USD", "amount": 55.00, "description": "Koodo Mobile - Monthly Plan" },
+
+        { "date_transacted": "2026-02-15", "date_posted": "2026-02-15", "currency": "USD", "amount": 59.99, "description": "GoodLife Fitness - Monthly" },
+        { "date_transacted": "2026-01-15", "date_posted": "2026-01-15", "currency": "USD", "amount": 59.99, "description": "GoodLife Fitness - Monthly" },
+        { "date_transacted": "2025-12-15", "date_posted": "2025-12-15", "currency": "USD", "amount": 59.99, "description": "GoodLife Fitness - Monthly" },
+
+        { "date_transacted": "2026-02-10", "date_posted": "2026-02-10", "currency": "USD", "amount": 15.99, "description": "Netflix Subscription" },
+        { "date_transacted": "2026-01-10", "date_posted": "2026-01-10", "currency": "USD", "amount": 15.99, "description": "Netflix Subscription" },
+        { "date_transacted": "2025-12-10", "date_posted": "2025-12-10", "currency": "USD", "amount": 15.99, "description": "Netflix Subscription" },
+
+        { "date_transacted": "2026-02-10", "date_posted": "2026-02-10", "currency": "USD", "amount": 11.99, "description": "Spotify Premium" },
+        { "date_transacted": "2026-01-10", "date_posted": "2026-01-10", "currency": "USD", "amount": 11.99, "description": "Spotify Premium" },
+        { "date_transacted": "2025-12-10", "date_posted": "2025-12-10", "currency": "USD", "amount": 11.99, "description": "Spotify Premium" },
+
+        { "date_transacted": "2026-02-02", "date_posted": "2026-02-03", "currency": "USD", "amount": 78.42, "description": "Loblaws - Groceries" },
+        { "date_transacted": "2026-02-09", "date_posted": "2026-02-10", "currency": "USD", "amount": 92.18, "description": "No Frills - Groceries" },
+        { "date_transacted": "2026-02-16", "date_posted": "2026-02-17", "currency": "USD", "amount": 65.30, "description": "Loblaws - Groceries" },
+        { "date_transacted": "2026-02-23", "date_posted": "2026-02-24", "currency": "USD", "amount": 84.55, "description": "Metro - Groceries" },
+        { "date_transacted": "2026-01-04", "date_posted": "2026-01-05", "currency": "USD", "amount": 71.20, "description": "Loblaws - Groceries" },
+        { "date_transacted": "2026-01-11", "date_posted": "2026-01-12", "currency": "USD", "amount": 88.95, "description": "No Frills - Groceries" },
+        { "date_transacted": "2026-01-18", "date_posted": "2026-01-19", "currency": "USD", "amount": 55.40, "description": "Metro - Groceries" },
+        { "date_transacted": "2026-01-25", "date_posted": "2026-01-26", "currency": "USD", "amount": 79.88, "description": "Loblaws - Groceries" },
+        { "date_transacted": "2025-12-06", "date_posted": "2025-12-07", "currency": "USD", "amount": 95.62, "description": "Loblaws - Groceries" },
+        { "date_transacted": "2025-12-13", "date_posted": "2025-12-14", "currency": "USD", "amount": 67.34, "description": "No Frills - Groceries" },
+        { "date_transacted": "2025-12-20", "date_posted": "2025-12-21", "currency": "USD", "amount": 142.50, "description": "Loblaws - Holiday Groceries" },
+        { "date_transacted": "2025-12-27", "date_posted": "2025-12-28", "currency": "USD", "amount": 58.90, "description": "Metro - Groceries" },
+
+        { "date_transacted": "2026-02-05", "date_posted": "2026-02-05", "currency": "USD", "amount": 156.00, "description": "Presto Card - TTC Monthly Pass" },
+        { "date_transacted": "2026-01-05", "date_posted": "2026-01-05", "currency": "USD", "amount": 156.00, "description": "Presto Card - TTC Monthly Pass" },
+        { "date_transacted": "2025-12-05", "date_posted": "2025-12-05", "currency": "USD", "amount": 156.00, "description": "Presto Card - TTC Monthly Pass" },
+
+        { "date_transacted": "2026-02-14", "date_posted": "2026-02-14", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+        { "date_transacted": "2026-02-28", "date_posted": "2026-02-28", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+        { "date_transacted": "2026-01-15", "date_posted": "2026-01-15", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+        { "date_transacted": "2026-01-31", "date_posted": "2026-01-31", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+        { "date_transacted": "2025-12-15", "date_posted": "2025-12-15", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+        { "date_transacted": "2025-12-31", "date_posted": "2025-12-31", "currency": "USD", "amount": -5000, "description": "Payroll Deposit - Sentra Inc" },
+
+        { "date_transacted": "2026-02-01", "date_posted": "2026-02-01", "currency": "USD", "amount": 750, "description": "Transfer to Wealthsimple TFSA" },
+        { "date_transacted": "2026-01-01", "date_posted": "2026-01-01", "currency": "USD", "amount": 750, "description": "Transfer to Wealthsimple TFSA" },
+        { "date_transacted": "2025-12-01", "date_posted": "2025-12-01", "currency": "USD", "amount": 750, "description": "Transfer to Wealthsimple TFSA" },
+
+        { "date_transacted": "2026-02-01", "date_posted": "2026-02-01", "currency": "USD", "amount": 500, "description": "Transfer to Savings - House Fund" },
+        { "date_transacted": "2026-01-01", "date_posted": "2026-01-01", "currency": "USD", "amount": 500, "description": "Transfer to Savings - House Fund" },
+        { "date_transacted": "2025-12-01", "date_posted": "2025-12-01", "currency": "USD", "amount": 500, "description": "Transfer to Savings - House Fund" },
+
+        { "date_transacted": "2026-02-12", "date_posted": "2026-02-12", "currency": "USD", "amount": 42.50, "description": "Uber Ride" },
+        { "date_transacted": "2026-01-20", "date_posted": "2026-01-20", "currency": "USD", "amount": 28.75, "description": "Uber Ride" },
+        { "date_transacted": "2025-12-22", "date_posted": "2025-12-22", "currency": "USD", "amount": 35.00, "description": "Uber Ride" },
+        { "date_transacted": "2025-12-31", "date_posted": "2025-12-31", "currency": "USD", "amount": 55.00, "description": "Uber Ride - NYE" }
+      ]
+    },
+
+    {
+      "type": "depository",
+      "subtype": "savings",
+      "starting_balance": 22500,
+      "meta": {
+        "name": "High Interest Savings",
+        "official_name": "House Down Payment Fund",
+        "mask": "7701"
+      },
+      "numbers": {
+        "account": "9876543210",
+        "ach_routing": "021000021"
+      },
+      "transactions": [
+        { "date_transacted": "2026-02-01", "date_posted": "2026-02-01", "currency": "USD", "amount": -500, "description": "Transfer from Checking - House Fund" },
+        { "date_transacted": "2026-01-01", "date_posted": "2026-01-01", "currency": "USD", "amount": -500, "description": "Transfer from Checking - House Fund" },
+        { "date_transacted": "2025-12-01", "date_posted": "2025-12-01", "currency": "USD", "amount": -500, "description": "Transfer from Checking - House Fund" },
+        { "date_transacted": "2026-02-28", "date_posted": "2026-02-28", "currency": "USD", "amount": -18.75, "description": "Interest Payment" },
+        { "date_transacted": "2026-01-31", "date_posted": "2026-01-31", "currency": "USD", "amount": -17.50, "description": "Interest Payment" },
+        { "date_transacted": "2025-12-31", "date_posted": "2025-12-31", "currency": "USD", "amount": -16.25, "description": "Interest Payment" }
+      ]
+    },
+
+    {
+      "type": "credit",
+      "subtype": "credit card",
+      "starting_balance": 3200,
+      "meta": {
+        "name": "Cashback Visa",
+        "official_name": "TD Cashback Visa Infinite",
+        "limit": 15000,
+        "mask": "3344"
+      },
+      "liability": {
+        "type": "credit",
+        "purchase_apr": 20.99,
+        "cash_apr": 22.99,
+        "balance_transfer_apr": 22.99,
+        "special_apr": 0,
+        "last_payment_amount": 1200,
+        "minimum_payment_amount": 64
+      },
+      "inflow_model": {
+        "type": "monthly-balance-payment",
+        "payment_day_of_month": 25,
+        "statement_day_of_month": 20,
+        "transaction_name": "Credit Card Payment"
+      },
+      "transactions": [
+        { "date_transacted": "2026-02-03", "date_posted": "2026-02-04", "currency": "USD", "amount": 45.80, "description": "Pai Northern Thai Kitchen" },
+        { "date_transacted": "2026-02-05", "date_posted": "2026-02-06", "currency": "USD", "amount": 32.15, "description": "Tim Hortons" },
+        { "date_transacted": "2026-02-06", "date_posted": "2026-02-07", "currency": "USD", "amount": 189.99, "description": "Best Buy - Electronics" },
+        { "date_transacted": "2026-02-07", "date_posted": "2026-02-08", "currency": "USD", "amount": 67.50, "description": "LCBO - Wine & Spirits" },
+        { "date_transacted": "2026-02-08", "date_posted": "2026-02-09", "currency": "USD", "amount": 55.20, "description": "Shell Gas Station" },
+        { "date_transacted": "2026-02-10", "date_posted": "2026-02-11", "currency": "USD", "amount": 28.99, "description": "Amazon.ca - Book Order" },
+        { "date_transacted": "2026-02-11", "date_posted": "2026-02-12", "currency": "USD", "amount": 78.00, "description": "Scotiabank Arena - Raptors Game" },
+        { "date_transacted": "2026-02-13", "date_posted": "2026-02-14", "currency": "USD", "amount": 125.00, "description": "Valentines Dinner - Canoe Restaurant" },
+        { "date_transacted": "2026-02-14", "date_posted": "2026-02-15", "currency": "USD", "amount": 42.30, "description": "Shoppers Drug Mart" },
+        { "date_transacted": "2026-02-16", "date_posted": "2026-02-17", "currency": "USD", "amount": 15.50, "description": "Second Cup Coffee" },
+        { "date_transacted": "2026-02-18", "date_posted": "2026-02-19", "currency": "USD", "amount": 199.00, "description": "Uniqlo - Clothing" },
+        { "date_transacted": "2026-02-20", "date_posted": "2026-02-21", "currency": "USD", "amount": 38.75, "description": "Uber Eats - Food Delivery" },
+        { "date_transacted": "2026-02-22", "date_posted": "2026-02-23", "currency": "USD", "amount": 52.00, "description": "Petro-Canada Gas" },
+        { "date_transacted": "2026-02-24", "date_posted": "2026-02-25", "currency": "USD", "amount": 85.00, "description": "Winners - Home Decor" },
+        { "date_transacted": "2026-02-26", "date_posted": "2026-02-27", "currency": "USD", "amount": 22.40, "description": "Starbucks" },
+        { "date_transacted": "2026-02-28", "date_posted": "2026-02-28", "currency": "USD", "amount": 65.00, "description": "TIFF Bell Lightbox - Movie" },
+
+        { "date_transacted": "2026-01-02", "date_posted": "2026-01-03", "currency": "USD", "amount": 38.50, "description": "Kinka Izakaya - Dinner" },
+        { "date_transacted": "2026-01-04", "date_posted": "2026-01-05", "currency": "USD", "amount": 245.00, "description": "Canada Goose Outlet" },
+        { "date_transacted": "2026-01-06", "date_posted": "2026-01-07", "currency": "USD", "amount": 48.30, "description": "Shell Gas Station" },
+        { "date_transacted": "2026-01-08", "date_posted": "2026-01-09", "currency": "USD", "amount": 12.99, "description": "iCloud Storage - Monthly" },
+        { "date_transacted": "2026-01-09", "date_posted": "2026-01-10", "currency": "USD", "amount": 34.20, "description": "Uber Eats - Food Delivery" },
+        { "date_transacted": "2026-01-11", "date_posted": "2026-01-12", "currency": "USD", "amount": 92.00, "description": "Nordstrom Rack - Shoes" },
+        { "date_transacted": "2026-01-13", "date_posted": "2026-01-14", "currency": "USD", "amount": 27.80, "description": "Tim Hortons" },
+        { "date_transacted": "2026-01-15", "date_posted": "2026-01-16", "currency": "USD", "amount": 165.00, "description": "Air Canada - Flight Booking" },
+        { "date_transacted": "2026-01-17", "date_posted": "2026-01-18", "currency": "USD", "amount": 55.00, "description": "Cineplex - Movie Night" },
+        { "date_transacted": "2026-01-19", "date_posted": "2026-01-20", "currency": "USD", "amount": 72.50, "description": "The Keg Steakhouse" },
+        { "date_transacted": "2026-01-21", "date_posted": "2026-01-22", "currency": "USD", "amount": 18.99, "description": "Amazon.ca - Household" },
+        { "date_transacted": "2026-01-23", "date_posted": "2026-01-24", "currency": "USD", "amount": 44.60, "description": "Petro-Canada Gas" },
+        { "date_transacted": "2026-01-25", "date_posted": "2026-01-26", "currency": "USD", "amount": -1200, "description": "Payment - Thank You" },
+        { "date_transacted": "2026-01-27", "date_posted": "2026-01-28", "currency": "USD", "amount": 38.90, "description": "Shoppers Drug Mart" },
+        { "date_transacted": "2026-01-29", "date_posted": "2026-01-30", "currency": "USD", "amount": 15.00, "description": "Balzacs Coffee" },
+
+        { "date_transacted": "2025-12-02", "date_posted": "2025-12-03", "currency": "USD", "amount": 52.40, "description": "Montecito Restaurant" },
+        { "date_transacted": "2025-12-04", "date_posted": "2025-12-05", "currency": "USD", "amount": 350.00, "description": "Apple Store - AirPods Pro" },
+        { "date_transacted": "2025-12-06", "date_posted": "2025-12-07", "currency": "USD", "amount": 42.80, "description": "Shell Gas Station" },
+        { "date_transacted": "2025-12-08", "date_posted": "2025-12-09", "currency": "USD", "amount": 28.50, "description": "Tim Hortons" },
+        { "date_transacted": "2025-12-10", "date_posted": "2025-12-11", "currency": "USD", "amount": 12.99, "description": "iCloud Storage - Monthly" },
+        { "date_transacted": "2025-12-12", "date_posted": "2025-12-13", "currency": "USD", "amount": 175.00, "description": "Hudson's Bay - Holiday Gift" },
+        { "date_transacted": "2025-12-14", "date_posted": "2025-12-15", "currency": "USD", "amount": 89.00, "description": "TIFF Bell Lightbox - Event" },
+        { "date_transacted": "2025-12-16", "date_posted": "2025-12-17", "currency": "USD", "amount": 125.00, "description": "Indigo Books - Holiday Gifts" },
+        { "date_transacted": "2025-12-18", "date_posted": "2025-12-19", "currency": "USD", "amount": 48.20, "description": "Uber Eats - Food Delivery" },
+        { "date_transacted": "2025-12-20", "date_posted": "2025-12-21", "currency": "USD", "amount": 215.00, "description": "Aritzia - Winter Clothing" },
+        { "date_transacted": "2025-12-22", "date_posted": "2025-12-23", "currency": "USD", "amount": 95.00, "description": "Holiday Dinner - Alo Restaurant" },
+        { "date_transacted": "2025-12-24", "date_posted": "2025-12-25", "currency": "USD", "amount": 67.50, "description": "LCBO - Holiday Wine" },
+        { "date_transacted": "2025-12-25", "date_posted": "2025-12-26", "currency": "USD", "amount": -1100, "description": "Payment - Thank You" },
+        { "date_transacted": "2025-12-27", "date_posted": "2025-12-28", "currency": "USD", "amount": 55.30, "description": "Petro-Canada Gas" },
+        { "date_transacted": "2025-12-29", "date_posted": "2025-12-30", "currency": "USD", "amount": 42.00, "description": "Ramen Isshin - Dinner" },
+        { "date_transacted": "2025-12-31", "date_posted": "2025-12-31", "currency": "USD", "amount": 150.00, "description": "NYE Party Supplies & Drinks" }
+      ]
+    },
+
+    {
+      "type": "investment",
+      "subtype": "brokerage",
+      "meta": {
+        "name": "TFSA Investment Account",
+        "official_name": "Tax-Free Savings Account - Self-Directed",
+        "mask": "8856"
+      },
+      "holdings": [
+        {
+          "institution_price": 118.50,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 105.20,
+          "quantity": 150,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "VTI",
+            "name": "Vanguard Total Stock Market ETF",
+            "currency": "USD"
+          }
+        },
+        {
+          "institution_price": 62.30,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 58.40,
+          "quantity": 100,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "VXUS",
+            "name": "Vanguard Total International Stock ETF",
+            "currency": "USD"
+          }
+        },
+        {
+          "institution_price": 72.15,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 73.80,
+          "quantity": 80,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "BND",
+            "name": "Vanguard Total Bond Market ETF",
+            "currency": "USD"
+          }
+        },
+        {
+          "institution_price": 198.75,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 175.00,
+          "quantity": 25,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "AAPL",
+            "name": "Apple Inc.",
+            "currency": "USD"
+          }
+        },
+        {
+          "institution_price": 445.20,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 380.00,
+          "quantity": 10,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "MSFT",
+            "name": "Microsoft Corporation",
+            "currency": "USD"
+          }
+        },
+        {
+          "institution_price": 1.00,
+          "institution_price_as_of": "2026-02-28",
+          "cost_basis": 1.00,
+          "quantity": 2850.50,
+          "currency": "USD",
+          "security": {
+            "ticker_symbol": "CUR:USD",
+            "name": "US Dollar Cash",
+            "currency": "USD"
+          }
+        }
+      ],
+      "investment_transactions": [
+        {
+          "date": "2026-02-03",
+          "name": "Buy VTI - Monthly DCA",
+          "quantity": 6,
+          "price": 117.80,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VTI", "currency": "USD" }
+        },
+        {
+          "date": "2026-02-03",
+          "name": "Buy VXUS - Monthly DCA",
+          "quantity": 4,
+          "price": 61.90,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VXUS", "currency": "USD" }
+        },
+        {
+          "date": "2026-01-03",
+          "name": "Buy VTI - Monthly DCA",
+          "quantity": 6,
+          "price": 115.40,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VTI", "currency": "USD" }
+        },
+        {
+          "date": "2026-01-03",
+          "name": "Buy VXUS - Monthly DCA",
+          "quantity": 4,
+          "price": 60.50,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VXUS", "currency": "USD" }
+        },
+        {
+          "date": "2026-01-03",
+          "name": "Buy BND - Rebalance",
+          "quantity": 5,
+          "price": 71.80,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "BND", "currency": "USD" }
+        },
+        {
+          "date": "2025-12-02",
+          "name": "Buy VTI - Monthly DCA",
+          "quantity": 6,
+          "price": 112.90,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VTI", "currency": "USD" }
+        },
+        {
+          "date": "2025-12-02",
+          "name": "Buy VXUS - Monthly DCA",
+          "quantity": 4,
+          "price": 59.20,
+          "fees": 0,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "VXUS", "currency": "USD" }
+        },
+        {
+          "date": "2025-12-15",
+          "name": "Buy AAPL - Single Stock",
+          "quantity": 5,
+          "price": 185.50,
+          "fees": 4.95,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "AAPL", "currency": "USD" }
+        },
+        {
+          "date": "2025-12-15",
+          "name": "Buy MSFT - Single Stock",
+          "quantity": 2,
+          "price": 420.00,
+          "fees": 4.95,
+          "type": "buy",
+          "currency": "USD",
+          "security": { "ticker_symbol": "MSFT", "currency": "USD" }
+        },
+        {
+          "date": "2026-02-01",
+          "name": "TFSA Contribution",
+          "quantity": 750,
+          "price": 1,
+          "fees": 0,
+          "type": "cash",
+          "currency": "USD",
+          "security": { "ticker_symbol": "CUR:USD", "currency": "USD" }
+        },
+        {
+          "date": "2026-01-01",
+          "name": "TFSA Contribution",
+          "quantity": 750,
+          "price": 1,
+          "fees": 0,
+          "type": "cash",
+          "currency": "USD",
+          "security": { "ticker_symbol": "CUR:USD", "currency": "USD" }
+        },
+        {
+          "date": "2025-12-01",
+          "name": "TFSA Contribution",
+          "quantity": 750,
+          "price": 1,
+          "fees": 0,
+          "type": "cash",
+          "currency": "USD",
+          "security": { "ticker_symbol": "CUR:USD", "currency": "USD" }
+        }
+      ]
+    },
+
+    {
+      "type": "loan",
+      "subtype": "student",
+      "meta": {
+        "name": "Student Loan",
+        "official_name": "Canada Student Loan",
+        "mask": "5512"
+      },
+      "liability": {
+        "type": "student",
+        "origination_date": "2021-09-01",
+        "principal": 35000,
+        "nominal_apr": 5.75,
+        "loan_name": "Canada Student Loan - BSc Computer Science",
+        "is_federal": true,
+        "loan_status": {
+          "type": "repayment",
+          "end_date": "2031-09-01"
+        },
+        "minimum_payment_amount": 380,
+        "repayment_model": {
+          "type": "standard",
+          "non_repayment_months": 6,
+          "repayment_months": 120
+        },
+        "repayment_plan_type": "standard",
+        "repayment_plan_description": "Standard 10-year repayment"
+      }
+    }
+  ]
+}

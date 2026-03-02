@@ -1,0 +1,3 @@
+{
+  "/api/monitor/liquidity/route": "app/api/monitor/liquidity/route.js"
+}
