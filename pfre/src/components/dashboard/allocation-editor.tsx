@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import type { AllocationBuckets } from "@/lib/types";
 import { suggestAllocation } from "@/lib/store";
@@ -13,9 +13,9 @@ import { Pencil, Check, X, Sparkles } from "lucide-react";
 const BUCKET_LABELS: { key: keyof AllocationBuckets; label: string; color: string }[] = [
   { key: "fixedExpenses", label: "Fixed Expenses", color: "bg-rose-400" },
   { key: "variableExpenses", label: "Variable Expenses", color: "bg-blue-400" },
-  { key: "investments", label: "Investments", color: "bg-green-400" },
+  { key: "investments", label: "Investments or Savings", color: "bg-green-400" },
   { key: "savingsGoal", label: "Savings Goal", color: "bg-purple-400" },
-  { key: "cashBuffer", label: "Cash Buffer", color: "bg-amber-400" },
+  { key: "cashBuffer", label: "Cash", color: "bg-amber-400" },
 ];
 
 export function AllocationEditor() {
@@ -52,10 +52,50 @@ export function AllocationEditor() {
     setDraft(suggested);
   };
 
-  const updateBucket = (key: keyof AllocationBuckets, value: number) => {
+  const updateBucket = useCallback((key: keyof AllocationBuckets, newValue: number) => {
     if (!draft) return;
-    setDraft({ ...draft, [key]: value });
-  };
+    const clamped = Math.max(0, Math.min(100, newValue));
+    const oldValue = draft[key];
+    const delta = clamped - oldValue;
+    if (delta === 0) return;
+
+    const activeBucketKeys = buckets.map(b => b.key);
+    const otherKeys = activeBucketKeys.filter(k => k !== key);
+    const otherTotal = otherKeys.reduce((s, k) => s + (draft[k] ?? 0), 0);
+    const newDraft = { ...draft, [key]: clamped };
+
+    if (otherTotal > 0) {
+      let remaining = -delta;
+      const adjustments: Record<string, number> = {};
+
+      for (const k of otherKeys) {
+        const proportion = (draft[k] ?? 0) / otherTotal;
+        adjustments[k] = Math.round(remaining * proportion);
+      }
+
+      // Apply adjustments, floor at 0
+      for (const k of otherKeys) {
+        newDraft[k] = Math.max(0, (draft[k] ?? 0) + (adjustments[k] ?? 0));
+      }
+
+      // Fix any rounding error — adjust the largest other bucket
+      const currentTotal = activeBucketKeys.reduce((s, k) => s + newDraft[k], 0);
+      const roundingError = 100 - currentTotal;
+      if (roundingError !== 0) {
+        const largest = otherKeys.reduce((a, b) => (newDraft[a] >= newDraft[b] ? a : b));
+        newDraft[largest] = Math.max(0, newDraft[largest] + roundingError);
+      }
+    } else if (clamped < 100) {
+      // All others are 0 — distribute remainder to cash
+      newDraft.cashBuffer = 100 - clamped;
+    }
+
+    setDraft(newDraft);
+  }, [draft, buckets]);
+
+  // Normalize bar widths so they never visually exceed 100%
+  const barTotal = buckets.reduce((s, b) => s + allocation[b.key], 0);
+  const barScale = barTotal > 0 ? Math.min(1, 100 / barTotal) : 0;
 
   return (
     <Card className="border-0 shadow-sm">
@@ -70,7 +110,7 @@ export function AllocationEditor() {
             <Button size="sm" variant="ghost" onClick={resetToAi} className="text-xs">
               <Sparkles className="w-3 h-3 mr-1" /> AI Suggest
             </Button>
-            <Button size="sm" variant="ghost" onClick={save}>
+            <Button size="sm" variant="ghost" onClick={save} disabled={total !== 100}>
               <Check className="w-3 h-3" />
             </Button>
             <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setDraft(null); }}>
@@ -80,17 +120,17 @@ export function AllocationEditor() {
         )}
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Visual bar */}
-        <div className="h-4 rounded-full overflow-hidden flex">
+        {/* Visual bar — widths normalized to never exceed container */}
+        <div className="h-4 rounded-full overflow-hidden flex bg-muted/30">
           {buckets.map(b => {
-            const pct = allocation[b.key];
+            const pct = allocation[b.key] * barScale;
             if (pct === 0) return null;
             return (
               <div
                 key={b.key}
                 className={`${b.color} transition-all`}
                 style={{ width: `${pct}%` }}
-                title={`${b.label}: ${pct}%`}
+                title={`${b.label}: ${allocation[b.key]}%`}
               />
             );
           })}
@@ -130,9 +170,9 @@ export function AllocationEditor() {
           ))}
         </div>
 
-        {editing && total !== 100 && (
-          <p className="text-xs text-red-500 text-center">
-            Total is {total}% — should be 100%.
+        {editing && (
+          <p className={`text-xs text-center ${total === 100 ? "text-green-600" : "text-red-500"}`}>
+            Total: {total}%{total !== 100 && " — must be 100% to save"}
           </p>
         )}
       </CardContent>

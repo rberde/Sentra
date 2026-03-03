@@ -112,6 +112,7 @@ export interface ConstraintMap {
 export interface StressResult {
   baselineMonthlyBurn: number;
   adjustedMonthlyBurn: number;
+  adjustedIncome: number;         // income after shocks (may be 0 for full job loss)
   liquidityRunway: number;        // months
   portfolioStressValue: number;
   riskScoreBefore: number;        // 0-100
@@ -120,6 +121,7 @@ export interface StressResult {
   constraintMap: ConstraintMap;
   depletionTimeline: MonthProjection[];
   additionalExpense: number;      // total lump sum / added expenses
+  crisisDurationMonths: number;   // effective planning horizon (unknown → 6)
 }
 
 export interface MonthProjection {
@@ -183,6 +185,29 @@ export interface Notification {
   isDismissed: boolean;
   createdAt: string;
   data?: Record<string, unknown>;
+}
+
+export interface NotificationRule {
+  id: string;
+  type: "spending_cap" | "liquidity_floor" | "drift_threshold" | "scheduled_checkin" | "risk_score_alert";
+  label: string;
+  description: string;
+  enabled: boolean;
+  threshold?: number;
+  intervalDays?: number;
+  aiGenerated?: boolean;
+}
+
+export interface NotificationSettings {
+  pingWindowStart: string; // "HH:mm"
+  pingWindowEnd: string;   // "HH:mm"
+  frequency: "realtime" | "daily_digest" | "weekly_digest";
+  channels: {
+    inApp: boolean;
+    sms: boolean;
+    push: boolean;
+  };
+  rules: NotificationRule[];
 }
 
 // ── Chat ──

@@ -178,11 +178,20 @@ export function simulateRiskBucket(
   };
   const stressedRisk = calculateBaselineRisk(stressedProfile);
 
-  const maxDuration = Math.max(...scenario.events.map(e => e.duration > 0 ? e.duration : 12));
+  const maxDuration = Math.max(...scenario.events.map(e => e.duration > 0 ? e.duration : 6));
+  const crisisDurationMonths = maxDuration;
+
+  // For income shocks, the "additional expense" is the monthly deficit * crisis duration.
+  // This represents the total cash burn the user faces over the planning horizon.
+  const monthlyGap = Math.max(0, adjustedBurn - adjustedIncome);
+  const incomeBasedPressure = incomeReduction > 0 ? monthlyGap * crisisDurationMonths : 0;
+  const expenseBasedPressure = totalLumpSum + additionalMonthlyExpense * crisisDurationMonths;
+  const totalAdditionalExpense = Math.max(incomeBasedPressure, expenseBasedPressure);
 
   return {
     baselineMonthlyBurn: baselineBurn,
     adjustedMonthlyBurn: adjustedBurn,
+    adjustedIncome: adjustedIncome,
     liquidityRunway: Math.round(liquidityRunway * 10) / 10,
     portfolioStressValue: stressedPortfolio,
     riskScoreBefore: baselineRisk,
@@ -190,6 +199,7 @@ export function simulateRiskBucket(
     riskScoreDelta: stressedRisk - baselineRisk,
     constraintMap: constraints,
     depletionTimeline: timeline,
-    additionalExpense: totalLumpSum + additionalMonthlyExpense * maxDuration,
+    additionalExpense: totalAdditionalExpense,
+    crisisDurationMonths,
   };
 }

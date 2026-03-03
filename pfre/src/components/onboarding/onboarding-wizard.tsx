@@ -665,6 +665,11 @@ export function OnboardingWizard() {
             {step === 4 && (
               <div className="space-y-5">
                 <CardDescription>Tell us about your total investment portfolio. Just the big picture.</CardDescription>
+                {plaidSnapshot && (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    Imported split from Plaid: cash/checking+savings <strong>${plaidSnapshot.cashBuffer.toLocaleString()}</strong>, portfolio/investments <strong>${plaidSnapshot.investmentsTotalValue.toLocaleString()}</strong>.
+                  </div>
+                )}
                 <div className="space-y-3">
                   <div>
                     <Label>Total Portfolio Value ($)</Label>
@@ -685,7 +690,7 @@ export function OnboardingWizard() {
                     />
                   </div>
                   <div>
-                    <Label>Cash Buffer / Checking Balance ($)</Label>
+                    <Label>Cash / Checking Balance ($)</Label>
                     <Input
                       type="number"
                       placeholder="e.g., 5000"
@@ -853,7 +858,7 @@ export function OnboardingWizard() {
                     <div className="text-xl font-bold">${profile.investments.totalValue.toLocaleString()}</div>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
-                    <div className="text-sm text-muted-foreground">Cash Buffer</div>
+                    <div className="text-sm text-muted-foreground">Cash</div>
                     <div className="text-xl font-bold">${profile.cashBuffer.toLocaleString()}</div>
                   </div>
                   {hasSavingsGoal && profile.savingsGoal && (

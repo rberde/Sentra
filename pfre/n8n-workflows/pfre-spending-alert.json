@@ -1,0 +1,84 @@
+{
+  "name": "PFRE — Spending Alert (Hourly)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1 }]
+        }
+      },
+      "id": "schedule",
+      "name": "Hourly Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.PFRE_BASE_URL || 'http://localhost:3000'}}/api/monitor/spending",
+        "options": { "timeout": 10000 }
+      },
+      "id": "http-spending",
+      "name": "Check Spending",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.data.alert }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-alert",
+      "name": "Over Budget?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "={{ $env.SLACK_CHANNEL || '#pfre-alerts' }}",
+        "text": "=:rotating_light: *Spending Alert*: {{ $json.data.message }}\n\nSpent: ${{ $json.data.actualSpendingThisMonth }} / Cap: ${{ $json.data.variableSpendingCap }} ({{ $json.data.percentUsed }}%)\nDays left this month: {{ $json.data.daysRemainingInMonth }}"
+      },
+      "id": "slack",
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [860, 200],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "noop",
+      "name": "Under Budget — OK",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [860, 400]
+    }
+  ],
+  "connections": {
+    "Hourly Check": {
+      "main": [[{ "node": "Check Spending", "type": "main", "index": 0 }]]
+    },
+    "Check Spending": {
+      "main": [[{ "node": "Over Budget?", "type": "main", "index": 0 }]]
+    },
+    "Over Budget?": {
+      "main": [
+        [{ "node": "Slack Alert", "type": "main", "index": 0 }],
+        [{ "node": "Under Budget — OK", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "PFRE" }]
+}

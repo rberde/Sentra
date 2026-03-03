@@ -23,6 +23,7 @@ import {
   Check,
   X,
   Send,
+  RotateCcw,
 } from "lucide-react";
 
 const RISK_BUCKETS: { type: RiskBucketType; name: string; icon: typeof Briefcase; description: string; color: string; questions: string[] }[] = [
@@ -40,7 +41,7 @@ const RISK_BUCKETS: { type: RiskBucketType; name: string; icon: typeof Briefcase
     icon: HeartPulse,
     description: "Unexpected lump sum expense",
     color: "bg-orange-50 border-orange-200 text-orange-700",
-    questions: ["What is the total bill amount?", "Can you pay it in installments? If so, over how many months?"],
+    questions: ["What is the total amount you need to pay?", "Can you pay it in installments? If so, over how many months?"],
   },
   {
     type: "market_shock",
@@ -65,25 +66,75 @@ interface AiFlowState {
   step: number;
   answers: string[];
   suggestedEvent: RiskEvent | null;
+  originalEvent: RiskEvent | null;
   loading: boolean;
+  chatLog: { role: "ai" | "user"; text: string }[];
+}
+
+/**
+ * Extracts the first dollar-like number from text, handling commas and $ signs.
+ * Returns null if no money-like pattern found.
+ */
+function parseMoney(input: string): number | null {
+  // Match patterns like $10,000 or $10000 or 10,000 or 10000
+  const moneyPattern = /\$?\s*([\d,]+(?:\.\d{1,2})?)/;
+  const match = input.replace(/[^\d$,.\s]/g, " ").match(moneyPattern);
+  if (!match) return null;
+  const n = parseFloat(match[1].replace(/,/g, ""));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n);
 }
 
 function parseMaybePercent(input: string): number | null {
   const lower = input.toLowerCase();
-  if (lower.includes("lost job") || lower.includes("no income") || lower.includes("zero income")) return 100;
-  if (lower.includes("half")) return 50;
-  if (lower.includes("quarter")) return 25;
-  const n = parseFloat(input.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return n <= 1 ? Math.round(n * 100) : Math.round(n);
+  if (lower.includes("lost job") || lower.includes("no income") || lower.includes("zero income") || lower.includes("all of it") || lower.includes("100%")) return 100;
+  if (lower.includes("half") || lower.includes("50%")) return 50;
+  if (lower.includes("quarter") || lower.includes("25%")) return 25;
+
+  // Look for explicit percent pattern like "5%" or "30 percent"
+  const pctMatch = lower.match(/([\d.]+)\s*(%|percent)/);
+  if (pctMatch) {
+    const n = parseFloat(pctMatch[1]);
+    if (Number.isFinite(n) && n > 0 && n <= 100) return Math.round(n);
+  }
+
+  return null;
 }
 
 function parseMaybeDuration(input: string): number {
   const lower = input.toLowerCase();
-  if (lower.includes("unknown") || lower.includes("not sure") || lower.includes("unsure")) return -1;
-  const n = parseFloat(input.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return -1;
-  return Math.max(1, Math.round(n));
+  if (lower.includes("unknown") || lower.includes("not sure") || lower.includes("unsure") || lower.includes("indefinite")) return -1;
+
+  // Look for patterns like "6 weeks", "3 months", "90 days"
+  const weekMatch = lower.match(/([\d.]+)\s*week/);
+  if (weekMatch) {
+    const weeks = parseFloat(weekMatch[1]);
+    if (Number.isFinite(weeks) && weeks > 0) return Math.max(1, Math.round(weeks / 4.345));
+  }
+
+  const dayMatch = lower.match(/([\d.]+)\s*day/);
+  if (dayMatch) {
+    const days = parseFloat(dayMatch[1]);
+    if (Number.isFinite(days) && days > 0) return Math.max(1, Math.round(days / 30));
+  }
+
+  const monthMatch = lower.match(/([\d.]+)\s*month/);
+  if (monthMatch) {
+    const months = parseFloat(monthMatch[1]);
+    if (Number.isFinite(months) && months > 0) return Math.max(1, Math.round(months));
+  }
+
+  const yearMatch = lower.match(/([\d.]+)\s*year/);
+  if (yearMatch) {
+    const years = parseFloat(yearMatch[1]);
+    if (Number.isFinite(years) && years > 0) return Math.round(years * 12);
+  }
+
+  // Bare number — assume months
+  const bare = parseFloat(lower.replace(/[^0-9.]/g, ""));
+  if (Number.isFinite(bare) && bare > 0 && bare <= 120) return Math.max(1, Math.round(bare));
+
+  return -1;
 }
 
 function suggestEventFromAnswers(type: RiskBucketType, answers: string[], profile: { monthlyIncome: number; investments: { totalValue: number } }): RiskEvent {
@@ -91,20 +142,24 @@ function suggestEventFromAnswers(type: RiskBucketType, answers: string[], profil
   let duration = -1;
   let lumpSum: number | undefined;
 
-  const num1 = parseFloat(answers[0]?.replace(/[^0-9.]/g, "") || "0");
-  const parsedPercent = parseMaybePercent(answers[0] ?? "");
-  const parsedDuration = parseMaybeDuration(answers[1] ?? "");
+  const answer1 = answers[0] ?? "";
+  const answer2 = answers[1] ?? "";
+  const money1 = parseMoney(answer1);
+  const parsedPercent = parseMaybePercent(answer1);
+  const parsedDuration = parseMaybeDuration(answer2);
 
   switch (type) {
     case "income_shock":
-      severity = num1 > 1 && profile.monthlyIncome > 0
-        ? Math.round((num1 / profile.monthlyIncome) * 100)
-        : (parsedPercent ?? 100);
-      severity = Math.min(100, Math.max(10, severity || 100));
+      if (parsedPercent !== null) {
+        severity = parsedPercent;
+      } else if (money1 !== null && money1 > 0 && profile.monthlyIncome > 0) {
+        severity = Math.round((money1 / profile.monthlyIncome) * 100);
+      }
+      severity = Math.min(100, Math.max(10, severity));
       duration = parsedDuration;
       break;
     case "expense_shock":
-      lumpSum = num1 > 0 ? num1 : 10000;
+      lumpSum = money1 !== null && money1 > 0 ? money1 : 10000;
       severity = 100;
       duration = parsedDuration === -1 ? 1 : parsedDuration;
       break;
@@ -129,6 +184,75 @@ function suggestEventFromAnswers(type: RiskBucketType, answers: string[], profil
     isActive: true,
     description: `Based on your answers: "${answers.join('" and "')}"`,
   };
+}
+
+/**
+ * Smarter followup application: determines WHICH field to update based on
+ * context clues in the message rather than blindly applying to all fields.
+ */
+function applyFollowupToEvent(event: RiskEvent, message: string, monthlyIncome: number): { updated: RiskEvent; explanation: string } {
+  const lower = message.toLowerCase();
+  const next: RiskEvent = { ...event };
+  const changes: string[] = [];
+
+  // Detect intent
+  const mentionsMoney = /\$|dollar|cost|amount|bill|lump|expense|pay|price|owe|interest/i.test(message);
+  const mentionsDuration = /\b(month|week|day|year|long|duration|time|last|until|indefinite|unknown)\b/i.test(message);
+  const mentionsSeverity = /\b(percent|%|severity|half|quarter|all|income|reduction|lost|drop)\b/i.test(message);
+  const mentionsInterestRate = /\b(interest|apr|rate)\b/i.test(lower);
+
+  const money = parseMoney(message);
+  const duration = parseMaybeDuration(message);
+  const percent = parseMaybePercent(message);
+
+  // If message mentions interest rate, don't treat the percentage as severity
+  if (mentionsInterestRate && money !== null) {
+    // Interest rate context: the dollar amount is the expense, not the rate
+    next.lumpSum = money;
+    changes.push(`Expense amount set to $${money.toLocaleString()}`);
+  } else if (mentionsMoney && !mentionsDuration && !mentionsSeverity && money !== null) {
+    // Pure money context → update lumpSum for expense_shock or severity for income
+    if (event.type === "expense_shock") {
+      next.lumpSum = money;
+      changes.push(`Expense amount set to $${money.toLocaleString()}`);
+    } else if (event.type === "income_shock" && monthlyIncome > 0) {
+      next.severity = Math.min(100, Math.max(10, Math.round((money / monthlyIncome) * 100)));
+      changes.push(`Severity set to ${next.severity}%`);
+    }
+  } else if (mentionsDuration && !mentionsMoney && !mentionsSeverity) {
+    // Pure duration context
+    if (duration !== -1) {
+      next.duration = duration;
+      changes.push(`Duration set to ${duration} months`);
+    } else {
+      next.duration = -1;
+      changes.push("Duration set to unknown");
+    }
+  } else if (mentionsSeverity && !mentionsMoney && !mentionsDuration && percent !== null) {
+    next.severity = percent;
+    changes.push(`Severity set to ${percent}%`);
+  } else {
+    // Mixed or ambiguous: apply the most prominent change only
+    if (money !== null && (event.type === "expense_shock" || mentionsMoney)) {
+      next.lumpSum = money;
+      changes.push(`Expense amount set to $${money.toLocaleString()}`);
+    } else if (percent !== null) {
+      next.severity = percent;
+      changes.push(`Severity set to ${percent}%`);
+    }
+    if (duration !== -1 && mentionsDuration) {
+      next.duration = duration;
+      changes.push(`Duration set to ${duration} months`);
+    }
+  }
+
+  if (lower.includes("unknown duration") || lower.includes("not sure how long") || lower.includes("indefinite")) {
+    next.duration = -1;
+    changes.push("Duration set to unknown");
+  }
+
+  const explanation = changes.length > 0 ? changes.join("; ") + "." : "I couldn't determine what to change from that message. Try being more specific.";
+  return { updated: next, explanation };
 }
 
 function EditableEventRow({ event, onSave, onRemove }: { event: RiskEvent; onSave: (e: RiskEvent) => void; onRemove: () => void }) {
@@ -197,6 +321,7 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
   const { state, dispatch } = useApp();
   const [aiFlow, setAiFlow] = useState<AiFlowState | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
+  const [followupMessage, setFollowupMessage] = useState("");
 
   const runSimulation = useCallback(() => {
     if (state.riskEvents.length === 0 || !state.profile) return;
@@ -210,7 +335,16 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
   if (!state.profile) return null;
 
   const startAiFlow = (type: RiskBucketType) => {
-    setAiFlow({ bucketType: type, step: 0, answers: [], suggestedEvent: null, loading: false });
+    const bucket = RISK_BUCKETS.find(b => b.type === type)!;
+    setAiFlow({
+      bucketType: type,
+      step: 0,
+      answers: [],
+      suggestedEvent: null,
+      originalEvent: null,
+      loading: false,
+      chatLog: [{ role: "ai", text: bucket.questions[0] }],
+    });
     setUserAnswer("");
   };
 
@@ -218,9 +352,15 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
     if (!aiFlow || !userAnswer.trim()) return;
     const bucket = RISK_BUCKETS.find(b => b.type === aiFlow.bucketType)!;
     const newAnswers = [...aiFlow.answers, userAnswer.trim()];
+    const newLog: AiFlowState["chatLog"] = [
+      ...aiFlow.chatLog,
+      { role: "user", text: userAnswer.trim() },
+    ];
 
     if (aiFlow.step + 1 < bucket.questions.length) {
-      setAiFlow({ ...aiFlow, step: aiFlow.step + 1, answers: newAnswers });
+      const nextQuestion = bucket.questions[aiFlow.step + 1];
+      newLog.push({ role: "ai", text: nextQuestion });
+      setAiFlow({ ...aiFlow, step: aiFlow.step + 1, answers: newAnswers, chatLog: newLog });
       setUserAnswer("");
     } else {
       const suggested = suggestEventFromAnswers(
@@ -228,15 +368,50 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
         newAnswers,
         { monthlyIncome: state.profile!.monthlyIncome, investments: state.profile!.investments },
       );
-      setAiFlow({ ...aiFlow, answers: newAnswers, suggestedEvent: suggested, loading: false });
+      const summaryParts: string[] = [];
+      if (suggested.type !== "expense_shock") summaryParts.push(`Severity: ${suggested.severity}%`);
+      summaryParts.push(`Duration: ${suggested.duration === -1 ? "unknown" : `${suggested.duration} months`}`);
+      if (suggested.lumpSum) summaryParts.push(`Amount: $${suggested.lumpSum.toLocaleString()}`);
+      newLog.push({ role: "ai", text: `Here's what I understood:\n${summaryParts.join("\n")}\n\nYou can edit the values below, or type a correction (e.g. "actually it's $10,000 over 6 weeks").` });
+
+      setAiFlow({ ...aiFlow, answers: newAnswers, suggestedEvent: suggested, originalEvent: { ...suggested }, loading: false, chatLog: newLog });
       setUserAnswer("");
     }
+  };
+
+  const handleFollowup = () => {
+    if (!aiFlow?.suggestedEvent || !followupMessage.trim()) return;
+    const lower = followupMessage.toLowerCase();
+
+    const newLog: AiFlowState["chatLog"] = [
+      ...aiFlow.chatLog,
+      { role: "user", text: followupMessage.trim() },
+    ];
+
+    // Handle "revert" / "undo" / "reset"
+    if (/\b(revert|undo|reset|start over|go back|original)\b/i.test(lower)) {
+      if (aiFlow.originalEvent) {
+        newLog.push({ role: "ai", text: "Reverted to the original suggestion." });
+        setAiFlow({ ...aiFlow, suggestedEvent: { ...aiFlow.originalEvent }, chatLog: newLog });
+      } else {
+        newLog.push({ role: "ai", text: "No previous version to revert to." });
+        setAiFlow({ ...aiFlow, chatLog: newLog });
+      }
+      setFollowupMessage("");
+      return;
+    }
+
+    const { updated, explanation } = applyFollowupToEvent(aiFlow.suggestedEvent, followupMessage, state.profile!.monthlyIncome);
+    newLog.push({ role: "ai", text: explanation });
+    setAiFlow({ ...aiFlow, suggestedEvent: updated, chatLog: newLog });
+    setFollowupMessage("");
   };
 
   const acceptSuggestion = () => {
     if (!aiFlow?.suggestedEvent) return;
     dispatch({ type: "ADD_RISK_EVENT", event: aiFlow.suggestedEvent });
     setAiFlow(null);
+    setFollowupMessage("");
   };
 
   const handleUpdateEvent = (event: RiskEvent) => {
@@ -281,7 +456,7 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
         })}
       </div>
 
-      {/* AI-guided flow */}
+      {/* AI-guided flow (Q&A phase) */}
       {aiFlow && !aiFlow.suggestedEvent && (
         <Card className="border-0 shadow-sm bg-primary/5">
           <CardContent className="p-4 space-y-3">
@@ -292,18 +467,18 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
               <span className="text-sm font-medium">AI Assistant</span>
             </div>
 
-            {/* Previous Q&A */}
-            {aiFlow.answers.map((ans, i) => (
-              <div key={i} className="space-y-1">
-                <p className="text-sm text-muted-foreground">{RISK_BUCKETS.find(b => b.type === aiFlow.bucketType)!.questions[i]}</p>
-                <p className="text-sm bg-white rounded-lg px-3 py-1.5 inline-block">{ans}</p>
-              </div>
-            ))}
-
-            {/* Current question */}
-            <p className="text-sm font-medium">
-              {RISK_BUCKETS.find(b => b.type === aiFlow.bucketType)!.questions[aiFlow.step]}
-            </p>
+            {/* Chat log */}
+            <div className="max-h-48 overflow-y-auto space-y-2">
+              {aiFlow.chatLog.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : ""}`}>
+                  <div className={`rounded-lg px-3 py-1.5 text-sm max-w-[85%] whitespace-pre-wrap ${
+                    msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-white"
+                  }`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+            </div>
 
             <div className="flex gap-2">
               <Input
@@ -325,32 +500,136 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
         </Card>
       )}
 
-      {/* AI suggestion review */}
+      {/* AI suggestion review with full chat history */}
       {aiFlow?.suggestedEvent && (
         <Card className="border-0 shadow-sm border-l-4 border-l-primary">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Bot className="w-4 h-4" /> AI Suggestion
             </CardTitle>
-            <CardDescription>Based on your answers, here&apos;s how I&apos;d model this risk event. You can edit before confirming.</CardDescription>
+            <CardDescription>Review and edit the risk event below. Chat to refine, or type &quot;revert&quot; to undo changes.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Chat history (scrollable) */}
+            <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-lg bg-muted/30 p-2">
+              {aiFlow.chatLog.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : ""}`}>
+                  <div className={`rounded-md px-2 py-1 text-xs max-w-[85%] whitespace-pre-wrap ${
+                    msg.role === "user" ? "bg-primary/10" : "bg-white"
+                  }`}>
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Current values display */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-muted/50 rounded-lg p-2">
-                <div className="text-xs text-muted-foreground">Severity</div>
-                <div className="font-bold">{aiFlow.suggestedEvent.severity}%</div>
-              </div>
+              {aiFlow.suggestedEvent.type !== "expense_shock" && (
+                <div className="bg-muted/50 rounded-lg p-2">
+                  <div className="text-xs text-muted-foreground">Severity</div>
+                  <div className="font-bold">{aiFlow.suggestedEvent.severity}%</div>
+                </div>
+              )}
               <div className="bg-muted/50 rounded-lg p-2">
                 <div className="text-xs text-muted-foreground">Duration</div>
-                <div className="font-bold">{aiFlow.suggestedEvent.duration} months</div>
+                <div className="font-bold">{aiFlow.suggestedEvent.duration === -1 ? "Unknown" : `${aiFlow.suggestedEvent.duration} months`}</div>
               </div>
               {aiFlow.suggestedEvent.lumpSum && (
                 <div className="bg-muted/50 rounded-lg p-2 col-span-2">
-                  <div className="text-xs text-muted-foreground">Lump Sum</div>
+                  <div className="text-xs text-muted-foreground">Expense Amount</div>
                   <div className="font-bold">${aiFlow.suggestedEvent.lumpSum.toLocaleString()}</div>
                 </div>
               )}
             </div>
+
+            {/* Inline editing */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">Edit before confirming</p>
+              <div className="grid grid-cols-2 gap-2">
+                {aiFlow.suggestedEvent.type !== "expense_shock" && (
+                  <div>
+                    <Label className="text-xs">Severity (%)</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-sm"
+                      value={aiFlow.suggestedEvent.severity}
+                      onChange={e => {
+                        const value = parseInt(e.target.value) || 0;
+                        setAiFlow({
+                          ...aiFlow,
+                          suggestedEvent: { ...aiFlow.suggestedEvent!, severity: Math.max(0, Math.min(100, value)) },
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+                <div>
+                  <Label className="text-xs">Duration (months)</Label>
+                  <Input
+                    type="number"
+                    className="h-8 text-sm"
+                    value={aiFlow.suggestedEvent.duration === -1 ? "" : aiFlow.suggestedEvent.duration}
+                    onChange={e => {
+                      const raw = parseInt(e.target.value);
+                      const value = Number.isFinite(raw) && raw > 0 ? raw : -1;
+                      setAiFlow({
+                        ...aiFlow,
+                        suggestedEvent: { ...aiFlow.suggestedEvent!, duration: value },
+                      });
+                    }}
+                    placeholder="Unknown"
+                  />
+                </div>
+                {aiFlow.suggestedEvent.type === "expense_shock" && (
+                  <div className="col-span-2">
+                    <Label className="text-xs">Expense Amount ($)</Label>
+                    <Input
+                      type="number"
+                      className="h-8 text-sm"
+                      value={aiFlow.suggestedEvent.lumpSum ?? 0}
+                      onChange={e => {
+                        const value = parseInt(e.target.value) || 0;
+                        setAiFlow({
+                          ...aiFlow,
+                          suggestedEvent: { ...aiFlow.suggestedEvent!, lumpSum: Math.max(0, value) },
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs gap-1"
+                onClick={() => {
+                  if (aiFlow.originalEvent) {
+                    setAiFlow({ ...aiFlow, suggestedEvent: { ...aiFlow.originalEvent } });
+                  }
+                }}
+              >
+                <RotateCcw className="w-3 h-3" /> Revert to original
+              </Button>
+            </div>
+
+            {/* Chat refinement */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">Chat with AI to refine</p>
+              <div className="flex gap-2">
+                <Input
+                  value={followupMessage}
+                  onChange={e => setFollowupMessage(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleFollowup()}
+                  placeholder={'e.g. "Actually it\'s $10,000 over 6 weeks"'}
+                  className="text-sm"
+                />
+                <Button variant="outline" onClick={handleFollowup} disabled={!followupMessage.trim()}>
+                  Apply
+                </Button>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <Button className="flex-1" onClick={acceptSuggestion}>
                 <Check className="w-4 h-4 mr-2" /> Looks Good — Add Event

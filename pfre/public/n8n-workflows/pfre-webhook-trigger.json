@@ -1,0 +1,100 @@
+{
+  "name": "PFRE — Webhook Trigger (Real-Time)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "pfre-alert",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "PFRE Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "pfre-alert"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.body.totalAlerts }}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "if-alerts",
+      "name": "Has Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json.body;\nconst fired = (data.alerts || []).filter(a => a.alert);\nconst lines = fired.map(a => `• [${a.severity.toUpperCase()}] ${a.title}: ${a.message}`);\n\nreturn [{\n  json: {\n    text: `:bell: *PFRE Real-Time Alert*\\n${lines.join('\\n')}`,\n    subject: `PFRE: ${fired.length} alert(s)`,\n    body: lines.join('\\n'),\n    totalAlerts: fired.length\n  }\n}];"
+      },
+      "id": "format",
+      "name": "Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 200]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "={{ $env.SLACK_CHANNEL || '#pfre-alerts' }}",
+        "text": "={{ $json.text }}"
+      },
+      "id": "slack",
+      "name": "Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [860, 200],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, processed: $json.totalAlerts }) }}"
+      },
+      "id": "respond",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1080, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, processed: 0 }) }}"
+      },
+      "id": "respond-skip",
+      "name": "Respond Skip",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [640, 400]
+    }
+  ],
+  "connections": {
+    "PFRE Webhook": {
+      "main": [[{ "node": "Has Alerts?", "type": "main", "index": 0 }]]
+    },
+    "Has Alerts?": {
+      "main": [
+        [{ "node": "Format", "type": "main", "index": 0 }],
+        [{ "node": "Respond Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format": {
+      "main": [[{ "node": "Slack", "type": "main", "index": 0 }, { "node": "Respond OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "PFRE" }]
+}

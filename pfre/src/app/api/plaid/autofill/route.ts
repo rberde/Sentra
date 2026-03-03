@@ -199,12 +199,15 @@ function buildExpenseEstimates(transactions: Array<{
       amount: monthlyAmount,
       category: entry.category,
     };
+    const nameLC = entry.name.toLowerCase();
+    const looksRecurringByName = /\b(internet|mobile|phone|gym|fitness|netflix|spotify|insurance|hydro|electric|gas\s*bill|water\s*bill|rogers|bell|telus|koodo|fido|shaw|cogeco|rent|mortgage|monthly)\b/.test(nameLC);
     const looksFixed =
-      entry.occurrences >= 3 ||
+      entry.occurrences >= 2 ||
       entry.category === "housing" ||
       entry.category === "insurance" ||
       entry.category === "loans" ||
-      entry.category === "subscriptions";
+      entry.category === "subscriptions" ||
+      looksRecurringByName;
 
     if (looksFixed) {
       fixedExpenses.push({ ...normalized, type: "fixed" });

@@ -1,5 +1,5 @@
 import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { convertToModelMessages, streamText } from "ai";
 import type { UserProfile, RiskEvent, StressResult, RebalancingPlan } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -13,19 +13,22 @@ function buildSystemPrompt(context: {
 }) {
   const { profile, riskEvents, stressResult, rebalancingPlans, selectedPlanId } = context;
 
-  let systemPrompt = `You are an AI financial risk advisor for the Personal Financial Risk Engine (PFRE). Your role is to help users understand their financial risk, explain stress test results, and guide them through rebalancing decisions.
+  let systemPrompt = `You are an AI financial risk advisor embedded in the Personal Financial Risk Engine (PFRE) app called Sentra. You have FULL ACCESS to the user's complete financial profile, risk events, stress test results, and rebalancing plans — all provided below. You are NOT a generic chatbot. You are a specialized financial advisor with real data about THIS user.
+
+CRITICAL: You DO have access to the user's financial data. Never say you don't have access or can't see their information. All their data is provided to you in this system prompt. Use it to give specific, personalized advice with real dollar amounts and percentages.
 
 KEY PRINCIPLES:
 - Be empathetic — the user may be under financial stress
-- Be specific — use actual numbers from their profile
+- Be specific — use ACTUAL numbers from their profile (never say "I don't have your data")
 - Be honest about tradeoffs — never sugarcoat
 - Always present options, never make decisions for the user
 - Explain in plain language, avoid jargon
+- Keep responses concise and actionable (2-4 paragraphs max)
 
 CAPABILITIES:
-- Explain risk scores, liquidity runway, and depletion timelines
+- Explain risk scores, liquidity runway, and depletion timelines using their real numbers
 - Help users understand which risk events to simulate
-- Explain rebalancing plans and their tradeoffs
+- Explain rebalancing plans and their tradeoffs with dollar amounts
 - Answer "what if" questions about different scenarios
 - Help users understand what money they can and cannot touch (constraints)`;
 
@@ -77,22 +80,33 @@ ${selected ? `\nUSER SELECTED: "${selected.name}"` : "\nNo plan selected yet."}`
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { messages, profile, riskEvents, stressResult, rebalancingPlans, selectedPlanId } = body;
+  try {
+    const body = await req.json();
+    const { messages, profile, riskEvents, stressResult, rebalancingPlans, selectedPlanId } = body;
 
-  const systemPrompt = buildSystemPrompt({
-    profile,
-    riskEvents: riskEvents || [],
-    stressResult,
-    rebalancingPlans: rebalancingPlans || [],
-    selectedPlanId,
-  });
+    if (!process.env.OPENAI_API_KEY) {
+      return new Response("AI is not configured. Add OPENAI_API_KEY to .env.local.", { status: 500 });
+    }
 
-  const result = streamText({
-    model: openai("gpt-4o"),
-    system: systemPrompt,
-    messages,
-  });
+    const systemPrompt = buildSystemPrompt({
+      profile,
+      riskEvents: riskEvents || [],
+      stressResult,
+      rebalancingPlans: rebalancingPlans || [],
+      selectedPlanId,
+    });
 
-  return result.toUIMessageStreamResponse();
+    const modelMessages = await convertToModelMessages(messages);
+
+    const result = streamText({
+      model: openai("gpt-4o"),
+      system: systemPrompt,
+      messages: modelMessages,
+    });
+
+    return result.toUIMessageStreamResponse();
+  } catch (error) {
+    console.error("Chat route error:", error);
+    return new Response("AI assistant temporary error. Please retry.", { status: 500 });
+  }
 }

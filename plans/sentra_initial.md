@@ -1,38 +1,74 @@
-PFRE MVP -- Full Build Plan (v3)
+PFRE MVP -- Full Build Plan (v4 — Updated March 2026)
 
+═══════════════════════════════════════════════════════════════
+STATUS TRACKER
+═══════════════════════════════════════════════════════════════
+
+Current State: Core MVP functional end-to-end. Onboarding → Dashboard → Risk Events → Rebalancing → Notifications → AI Chat → Toast Pings all working.
+
+Running at: http://localhost:3000 (Next.js 16 Turbopack dev server)
+
+┌─────────────────────────────────────────┬──────────────┐
+│ Feature                                 │ Status       │
+├─────────────────────────────────────────┼──────────────┤
+│ Onboarding Wizard (8 steps)             │ ✅ DONE      │
+│ Plaid Integration (Sandbox)             │ ✅ DONE      │
+│ Demo Data (Custom Sandbox User)         │ ✅ DONE      │
+│ Income Allocation Buckets               │ ✅ DONE      │
+│ AI-Suggested Allocation (sums to 100%)  │ ✅ DONE      │
+│ Auto-Adjust Linked Sliders              │ ✅ DONE      │
+│ Goal Weight Sliders (3 always visible)  │ ✅ DONE      │
+│ Financial Snapshot Dashboard            │ ✅ DONE      │
+│ Risk Event Declaration (4 buckets)      │ ✅ DONE      │
+│ AI-Guided Risk Flow + Chat History      │ ✅ DONE      │
+│ Context-Aware Followup Parsing          │ ✅ DONE      │
+│ Revert/Undo in Risk AI Chat             │ ✅ DONE      │
+│ Stress Test Engine                      │ ✅ DONE      │
+│ Constraint-Aware Rebalancer (3 plans)   │ ✅ DONE      │
+│ Metric Definitions Toggle               │ ✅ DONE      │
+│ Plan Selection + Activation             │ ✅ DONE      │
+│ AI Chat Companion (GPT-4o)              │ ✅ DONE      │
+│ Chat Scroll + Full Context Prompt       │ ✅ DONE      │
+│ Notification Center (in-app feed)       │ ✅ DONE      │
+│ Ping & Settings Tab (threshold rules)   │ ✅ DONE      │
+│ AI-Generated Notification Rules         │ ✅ DONE      │
+│ Toast Ping Notifications (phone-style)  │ ✅ DONE      │
+│ Agent Check Engine (client-side)        │ ✅ DONE      │
+│ Simulate Expense Spike (demo button)    │ ✅ DONE      │
+│ Plaid Refresh → Agent Checks → Toasts   │ ✅ DONE      │
+│ Account Page (recalc + chat history)    │ ✅ DONE      │
+│ Hydration Fix (SSR/client guard)        │ ✅ DONE      │
+│ Monitoring API Routes (5 endpoints)     │ ✅ DONE      │
+│ n8n Workflow Integration                │ 🔲 PLANNED   │
+│ SMS/Push Notifications (n8n channels)   │ 🔲 PLANNED   │
+│ Behavioral Profile (archetype detect)   │ 🔲 PLANNED   │
+│ Recharts Visualizations                 │ 🔲 PLANNED   │
+│ SQLite/Prisma Persistence               │ 🔲 PLANNED   │
+└─────────────────────────────────────────┴──────────────┘
+
+
+═══════════════════════════════════════════════════════════════
 Part 1: Alignment with Wealthsimple AI Builder Role
+═══════════════════════════════════════════════════════════════
 
 Verdict: Strong fit. The PFRE directly demonstrates the core competencies the AI Builder role demands.
 
-
-
-
-
 "Redesign processes as AI-native workflows" -- PFRE replaces growth-only financial tools with an AI-native risk and rebalancing system. Not AI layered on old workflows; rebuilt from scratch.
-
-
 
 "Own the full path from problem to shipped system" -- End-to-end: risk engine, agentic AI orchestration, constraint-aware rebalancing, hybrid UX, optional Plaid.
 
-
-
-"Make explicit decisions about where AI should take responsibility" -- AI suggests allocations and rebalancing plans; user always confirms. Guardrails enforce only after human approval.
-
-
+"Make explicit decisions about where AI should take responsibility" -- AI suggests allocations and rebalancing plans; user always confirms. Guardrails enforce only after human approval. AI auto-generates notification rules but user can edit every one.
 
 "Think in systems, move across disciplines" -- Financial modeling, behavioral economics, agentic AI, API integration, product design.
 
-
-
 "Turn ambiguity into shipped work" -- Financial stress is messy and personal. PFRE turns it into structured constraints, deterministic models, and quantified reallocation tradeoffs.
-
-
 
 Wealthsimple relevance -- Wealthsimple lacks a downside protection / stress testing layer. PFRE fills that product gap.
 
 
-
+═══════════════════════════════════════════════════════════════
 Part 2: Core Concept -- Income Allocation Buckets
+═══════════════════════════════════════════════════════════════
 
 The foundational data model is the user's monthly income allocation -- what percentage of income flows into each bucket.
 
@@ -42,1017 +78,488 @@ Monthly Take-Home Income (100%)
   |
   |-- Fixed Expenses (rent, mortgage, loans, insurance, subscriptions)
   |-- Variable Expenses (groceries, transport, entertainment, shopping)
-  |-- Investments (monthly contribution to portfolio)
+  |-- Investments or Savings (monthly contribution to portfolio)
   |-- Savings Goal (house down payment, car, education, etc.)
-  |-- Cash Buffer (checking/chequing account float)
+  |-- Cash (checking/chequing account float)
+
+IMPLEMENTATION NOTE: "Cash Buffer" renamed to "Cash" throughout the app. "Investments" label changed to "Investments or Savings" in the allocation editor. When no savings goal is defined, the third rebalancing plan becomes "Maximize Risk Payoff" instead of "Maximize Savings Goal".
 
 AI-Suggested Initial Allocation
 
 During onboarding, the user provides:
 
+- Monthly take-home income (via income streams — each tagged fixed/variable)
+- Fixed expenses (itemized, each categorized and tagged fixed/variable, editable)
+- Their primary goal (e.g., "Save $100K for a house down payment by Dec 2028")
+- Their goal weights (see below)
 
+The AI then suggests a starting allocation split. The algorithm:
+1. Fixed expenses = actual fixed expense total as % of income (capped at 80%)
+2. Remaining distributed across variable, investments, savings, cash using normalized goal weights
+3. Cash gets at least 5% of income
+4. Rounding errors absorbed into Cash to guarantee exactly 100% total
+5. When no savings goal, that bucket is 0% and its share redistributes
 
-
-
-Monthly take-home income
-
-
-
-Fixed expenses (itemized)
-
-
-
-Their primary goal (e.g., "Save $100K for a house down payment by Dec 2026")
-
-
-
-Their goal weights (see below)
-
-The AI then suggests a starting allocation split (e.g., "Based on your income of $5,000/month and fixed expenses of $2,000, I recommend: 40% fixed expenses, 20% variable, 15% investments, 15% savings goal, 10% cash buffer"). The user adjusts or approves.
+IMPLEMENTATION: `suggestAllocation()` in `src/lib/store.ts`. Always returns values summing to exactly 100.
 
 Goal Weights (User Maximization Priorities)
 
 The user sets three priority weights that tell the AI what matters most to them. These weights drive the 3 rebalancing options during a risk event.
 
+- Lifestyle Weight — How much the user values maintaining current variable spending
+- Savings Goal Weight / Risk Payoff Priority — How much the user values staying on track for a specific goal (or paying down risk quickly if no goal)
+- Investment Discipline Weight — How much the user values continuing monthly investment contributions
+
+IMPLEMENTATION: Three sliders always visible (step 6 of onboarding). Third slider dynamically labeled "Savings Goal" or "Risk Payoff Priority" based on whether a savings goal is defined.
 
 
-
-
-Lifestyle Weight -- How much the user values maintaining current variable spending (entertainment, dining, shopping). AI tracks average variable spending to understand their lifestyle baseline.
-
-
-
-Savings Goal Weight -- How much the user values staying on track for a specific goal (e.g., $100K for a house). This creates a protected savings bucket with a target amount and deadline.
-
-
-
-Investment Discipline Weight -- How much the user values continuing monthly investment contributions. When weighted high, investment contributions become a quasi-fixed expense that the AI tries to preserve.
-
-Weights are set on a simple slider interface (e.g., each 1-10, normalized internally). The AI suggests starting weights based on the user's stated goal, but the user can override.
-
-
-
+═══════════════════════════════════════════════════════════════
 Part 3: UX Architecture -- Hybrid (Structured Dashboard + Chat Companion)
+═══════════════════════════════════════════════════════════════
 
 The Two Interfaces
 
-flowchart LR
-    subgraph structured [Structured Dashboard -- Left/Main]
-        Onboarding[Onboarding Wizard]
-        AllocDash[Allocation Dashboard]
-        RiskCards[Risk Event Cards + Sliders]
-        RebalanceCards[3 Rebalancing Options]
-        Notifications[Notification Center]
-    end
-    subgraph chat [Chat Companion -- Right Sidebar]
-        ChatDeclare[Declare Risk Events]
-        ChatExplain[Ask for Explanations]
-        ChatWhatIf[What-If Questions]
-        ChatAdvice[Get AI Advice]
-    end
-    structured <-->|"AI translates between"| chat
-
-Structured Dashboard (primary): Forms, sliders, cards, charts. Deterministic, reproducible, fast.
-
-Chat Companion (persistent sidebar): The user can do everything through the structured UI, but the chat provides a natural-language layer for:
-
-
-
-
-
-Declaring risk events: User types "I just lost my job" or "I have a $15,000 medical bill coming" -- AI extracts the risk bucket, severity, and duration, and pre-fills the structured risk cards.
-
-
-
-Compound scenarios: "What if I lost my job AND had a medical expense?" -- AI stacks multiple risk buckets.
-
-
-
-Explaining results: "Why is my liquidity runway only 3 months?" -- Explainer Agent responds conversationally.
-
-
-
-What-if exploration: "What if the medical bill is $20K instead of $15K?" -- AI adjusts parameters and re-runs.
-
-
-
-Rebalancing conversation: The AI's signature interaction (see Part 5 below).
-
-
-
-Part 4: Data Ingestion -- Manual-First, Plaid-Optional
-
-MVP Default: Manual Monthly Input
-
-Users enter all financial data through a guided onboarding wizard in monthly format:
-
-
-
-
-
-Income: Take-home pay (fixed/variable tagged), secondary streams
-
-
-
-Fixed Expenses: Rent/mortgage, loans, insurance, subscriptions (itemized, auto-summed)
-
-
-
-Variable Expenses: Groceries, transport, entertainment, discretionary (estimated averages)
-
-
-
-Investments: Total portfolio value, allocation breakdown (% equities/bonds/cash/other), monthly contribution
-
-
-
-Savings Goal: Goal name, target amount, target date, current balance, monthly contribution
-
-
-
-Cash Buffer: Checking/chequing balance
-
-Optional: Connect via Plaid
-
-A "Connect Your Accounts" toggle in onboarding. If opted in:
-
-
-
-
-
-Plaid Link opens (handles bank login, MFA, OAuth)
-
-
-
-App exchanges public_token for access_token
-
-
-
-Pulls accounts, balances, and recent transactions
-
-
-
-Auto-categorizes transactions into fixed/variable expense buckets
-
-
-
-User reviews and corrects any miscategorizations
-
-If declined: manual input is the full experience. No feature degradation.
-
-The engine is input-source agnostic -- both paths produce the same internal data model.
-
-
-
+Structured Dashboard (primary): Forms, sliders, cards, tabs. Deterministic, reproducible, fast.
+
+Chat Companion (persistent sidebar): The user can do everything through the structured UI, but the chat provides a natural-language layer for declaring risk events, asking explanations, what-if scenarios, and comparing rebalancing plans.
+
+IMPLEMENTATION: Dashboard has 6 tabs:
+1. Overview — Financial snapshot, allocation editor (with auto-adjust linked sliders), savings goal card
+2. Risk Events — AI-guided risk declaration flow with inline chat history, editable suggestions, revert capability
+3. Rebalancing — Stress context metrics (with definition toggles), 3 plan cards, plan activation with AI-generated notification rules
+4. Notifications — In-app notification feed (active + dismissed)
+5. Ping & Settings — Threshold-based notification rules (AI-generated + custom), delivery preferences (time window, frequency, channels)
+6. Account — Baseline risk score, recalculate button, AI chat Q&A history
+
+Chat sidebar opens from the header, overlays right side. Uses GPT-4o with full financial context injected into system prompt.
+
+
+═══════════════════════════════════════════════════════════════
+Part 4: Data Ingestion -- Manual-First, Plaid-Optional, Demo-Data Fast Path
+═══════════════════════════════════════════════════════════════
+
+Three Paths to Populate Financial Data
+
+1. Demo Data (recommended for showcasing):
+   - One-click "Load Demo Data" button in onboarding step 1
+   - Creates a Plaid Sandbox item via `/api/plaid/sandbox-token` using a custom user JSON (`sandbox/plaid-custom-user.json`)
+   - Custom user includes: checking ($4,250), savings ($22,500), credit card ($3,200 balance), TFSA investment account (VTI, VXUS, BND, AAPL, MSFT holdings totaling ~$40K), and a student loan ($35K, 5.75% APR)
+   - 90 days of realistic Toronto-based transactions: rent, utilities, Rogers Internet, Koodo Mobile, GoodLife Fitness, Netflix, Spotify, groceries (Loblaws, No Frills, Metro), TTC pass, Uber rides, restaurants, shopping
+   - Exchanges token via `/api/plaid/exchange-token`, which fetches accounts, transactions, investment holdings, and liabilities
+   - Auto-categorizes expenses into fixed/variable using occurrence count + vendor name pattern matching
+
+2. Plaid Link (manual sandbox):
+   - Standard Plaid Link UI with `user_good` / `pass_good` sandbox credentials
+   - Returns Plaid's default sandbox data (less detailed than custom demo data)
+   - Same exchange-token flow as demo data
+
+3. Manual Entry:
+   - Full onboarding wizard: income streams, expenses (with editable fixed/variable type and category), investments, savings goal, cash balance
+   - Fallback expense examples auto-seeded if Plaid transactions aren't ready
+
+Expense Classification Logic (UPDATED):
+- Vendor name pattern matching for known recurring services: Rogers, Bell, Telus, Koodo, Netflix, Spotify, GoodLife, hydro, insurance, rent, mortgage, gym, internet, mobile, phone
+- Occurrence threshold lowered from 3 to 2 (catches bimonthly items)
+- Category-based: housing, insurance, loans, subscriptions → always fixed
+- All expenses editable by user (name, amount, category, fixed/variable type)
+
+IMPLEMENTATION: `buildExpenseEstimates()` in both `exchange-token/route.ts` and `autofill/route.ts`. Retry logic with backoff for `PRODUCT_NOT_READY`. Fallback examples via `createFallbackExpenseExamples()`.
+
+Onboarding Steps (8 total):
+0. Welcome — Name input
+1. Connect Accounts — Demo Data button, Plaid Link, or skip
+2. Income — Add income streams (name, monthly $, fixed/variable)
+3. Expenses — Add/edit expenses (name, amount, category, fixed/variable)
+4. Investments — Portfolio value, monthly contribution, cash balance
+5. Savings Goal — Optional toggle, goal details if enabled
+6. Goal Weights — 3 sliders (always visible, dynamically labeled)
+7. Review — Summary of all inputs, surplus calculation
+
+
+═══════════════════════════════════════════════════════════════
 Part 5: The Core AI Interaction -- Constraint-Aware Rebalancing
+═══════════════════════════════════════════════════════════════
 
 This is the heart of the product. When a user declares a risk event, the AI reasons about what money can and cannot be touched, and generates 3 reallocation plans aligned to each goal weight.
 
-The Flow
+The Flow (as implemented)
 
-sequenceDiagram
-    participant User
-    participant Chat as Chat Companion
-    participant Orchestrator as Orchestrator Agent
-    participant Risk as Risk Agent
-    participant Rebalancer as Rebalancer Agent
-    participant Explainer as Explainer Agent
-
-    User->>Chat: "I lost my job and have a $15K medical bill"
-    Chat->>Orchestrator: Extract: Income Shock (100%, unknown duration) + Expense Shock ($15K lump sum)
-    Orchestrator->>Risk: Run stress model with user profile
-    Risk-->>Orchestrator: Stress results (burn rate, runway, constraints)
-    Orchestrator->>Explainer: Summarize situation
-    Explainer-->>Chat: "I see you have a job loss (fixed income gone, unknown duration) and a $15K medical expense..."
-    Chat->>User: Situation summary + confirms goals still accurate
-    User->>Chat: "Yes, I still want to hit $100K investments by year end"
-    Chat->>Orchestrator: Goals confirmed, generate rebalancing options
-    Orchestrator->>Rebalancer: Generate 3 plans (Lifestyle / Investment / Savings Goal maximization)
-    Rebalancer-->>Orchestrator: 3 constraint-aware reallocation plans
-    Orchestrator->>Explainer: Generate tradeoff explanations
-    Explainer-->>Chat: 3 options with plain-language tradeoffs
-    Chat->>User: Presents 3 options
-    User->>Chat: Selects option or asks follow-up
+1. User selects a risk bucket card (Job Loss, Medical/Expense Shock, Market Crash, Lifestyle Inflation)
+2. AI assistant asks 2 context-specific questions via inline chat
+3. Full conversation history is visible and scrollable throughout
+4. AI parses answers using context-aware parsers:
+   - `parseMoney()` — regex-based, extracts first dollar-like pattern (handles commas, $, avoids concatenating multiple numbers)
+   - `parseMaybePercent()` — detects "half", "quarter", "lost job", explicit N% patterns
+   - `parseMaybeDuration()` — detects weeks/days/months/years/unknown/indefinite
+5. AI generates a suggested risk event with severity, duration, lump sum
+6. User can:
+   - Edit values directly via number inputs
+   - Chat with AI to refine (e.g., "actually it's $10,000 over 6 weeks")
+   - Type "revert" / "undo" / "reset" to restore the original suggestion
+   - Click "Revert to original" button
+7. Follow-up parsing is context-aware (`applyFollowupToEvent()`):
+   - Detects whether message is about money, duration, severity, or interest rates
+   - Only updates the relevant field (not all fields with the same number)
+   - Returns an explanation of what changed
+8. User confirms → event added to active events list
+9. "Simulate & Show Plans" runs stress engine + rebalancer and auto-navigates to Rebalancing tab
 
 Constraint Identification
 
-When a risk event hits, the AI first identifies what money can and cannot be touched:
+- Cannot touch (hard constraints): Fixed expenses — must be paid
+- Can reduce (soft constraints): Variable expenses — can be cut
+- Can pause (user-controlled): Investment contributions
+- Can redirect (user-controlled): Savings goal contributions
+- Available liquidity: Cash + accessible savings
 
+The 3 Rebalancing Options (always generated)
 
-
-
-
-Cannot touch (hard constraints): Fixed expenses (rent, mortgage, loan payments, insurance) -- these must be paid regardless
-
-
-
-Can reduce (soft constraints): Variable expenses -- groceries can be optimized, entertainment/shopping can be cut
-
-
-
-Can pause (user-controlled): Investment contributions -- depends on Investment Discipline weight
-
-
-
-Can redirect (user-controlled): Savings goal contributions -- depends on Savings Goal weight
-
-
-
-Available liquidity: Cash buffer + accessible savings (not goal-locked)
-
-The 3 Rebalancing Options
-
-For a scenario like job loss + $15K medical bill, the AI generates:
-
-Option 1: Maximize Lifestyle
-"To keep your lifestyle as close to normal as possible, we would pause your $750/month investment contributions and redirect your $500/month savings goal contributions to cash. This frees up $1,250/month. Combined with your $8,000 cash buffer, you can cover the $15K medical bill in ~6 months while keeping variable spending at $1,800/month (90% of current). Your $100K investment goal would be delayed by ~8 months. Your house savings would pause entirely."
-
-Option 2: Maximize Investment Discipline
-"To keep your investments on track for $100K by year-end, we would cut variable spending from $2,000 to $800/month (essentials only) and redirect savings goal contributions to cash. This frees up $1,700/month. Your medical bill is paid in ~4 months. Investment contributions continue at $750/month. Your house savings pauses. Lifestyle impact is significant for 4 months."
-
-Option 3: Maximize Savings Goal
-"To keep your house down payment on track, we would pause investment contributions ($750/month) and cut variable spending to $1,200/month. Savings contributions continue at $500/month. Medical bill is covered in ~5 months. Your $100K investment goal is delayed by ~6 months. Lifestyle is moderately reduced."
+1. Maximize Lifestyle — Pauses investments and redirects savings first; preserves variable spending
+2. Maximize Investments — Cuts variable spending aggressively; keeps investment contributions
+3. Maximize Savings Goal OR Maximize Risk Payoff — If savings goal exists: preserves savings contributions. If no savings goal: aggressive cuts for fastest expense resolution.
 
 Each option includes:
+- Exact dollar reallocation per bucket
+- Timeline to resolve the immediate expense
+- Impact on each goal (quantified delay, lifestyle reduction %)
+- Monthly budget breakdown during the crisis period
+- Projected net position at 6/12/24 months
+
+Stress Context Display (Rebalancing tab):
+- Liquidity runway (months)
+- Risk score (before → after)
+- Monthly deficit
+- "What do these mean?" toggle with definitions and typical ranges for each metric
+
+IMPLEMENTATION: `simulateRiskBucket()` in `risk-engine.ts`, `generateRebalancingPlans()` in `rebalancer.ts`, `RiskEventPanel` component, `RebalancingPanel` component.
 
 
-
-
-
-Exact dollar reallocation per bucket
-
-
-
-Timeline to resolve the immediate expense
-
-
-
-Impact on each goal (quantified delay or shortfall)
-
-
-
-Monthly budget breakdown during the crisis period
-
-
-
-Projected state at 6/12/24 months
-
-
-
+═══════════════════════════════════════════════════════════════
 Part 6: Agentic AI Architecture
+═══════════════════════════════════════════════════════════════
 
-flowchart TD
-    User[User] -->|"declares risk event via chat or cards"| Orchestrator[Orchestrator Agent]
-    Orchestrator -->|"profile + risk params"| RiskAgent[Risk Agent]
-    Orchestrator -->|"stress results + weights + constraints"| RebalancerAgent[Rebalancer Agent]
-    Orchestrator -->|"selected plan"| GuardrailAgent[Guardrail Agent]
-    Orchestrator -->|"any output"| ExplainerAgent[Explainer Agent]
-    RiskAgent -->|"stress metrics + constraint map"| Orchestrator
-    RebalancerAgent -->|"3 reallocation plans"| Orchestrator
-    GuardrailAgent -->|"monitoring rules + alerts"| Orchestrator
-    ExplainerAgent -->|"plain-language summaries"| Orchestrator
-    Orchestrator -->|"options for confirmation"| User
-    User -->|"approve / override / ask follow-up"| Orchestrator
+Agent Definitions (current implementation)
 
-Agent Definitions
+- Orchestrator Agent: Currently implemented as the React component layer + API routes. Routes data between risk engine, rebalancer, chat, and notification systems.
+- Risk Agent: Deterministic TypeScript engine. Functions: `calculateBaselineRisk()`, `simulateRiskBucket()`. Classifies money into constraint categories.
+- Rebalancer Agent: Deterministic TypeScript engine. Function: `generateRebalancingPlans()`. Takes stress results + constraint map + goal weights → 3 plans.
+- Guardrail Agent: Partially implemented. Auto-generates notification rules on plan activation. Threshold-based monitoring rules are configurable in Ping & Settings tab. Full n8n automation planned.
+- Explainer Agent: LLM-powered (GPT-4o via Vercel AI SDK). Generates all chat responses with full user context injected into system prompt. System prompt explicitly states the AI has access to the user's data.
 
+Human-in-the-Loop Checkpoints (implemented)
 
+1. Goal confirmation: User reviews and edits AI-suggested risk parameters before confirming
+2. Plan selection: User reviews 3 options and selects one
+3. Notification rule editing: AI auto-generates rules, user can toggle/edit/delete each one
+4. Ongoing overrides: User can dismiss any notification or re-trigger rebalancing
 
 
+═══════════════════════════════════════════════════════════════
+Part 7: Notification and Automation System
+═══════════════════════════════════════════════════════════════
 
-Orchestrator Agent: Routes data, manages the conversation + workflow sequence, enforces human-in-the-loop checkpoints. Translates chat input into structured risk parameters.
+Two-Layer Architecture
 
+Layer A — In-App Notification Rules + AI-Generated Alerts (✅ DONE)
 
+When a user selects a rebalancing plan, the AI agent auto-generates plan-specific notification rules:
+- Spending cap alert: tied to the plan's variable spending budget (e.g., "Alert when variable spending exceeds $1,800/mo")
+- Liquidity floor: based on current cash/expense ratio (e.g., "Alert when cash drops below 2 months of expenses")
+- Risk score alert: 10 points above current score (e.g., "Alert when risk score crosses 70")
+- Bi-weekly progress check-in (14-day interval)
 
-Risk Agent: Runs deterministic stress model. Tools: calculateBaselineRisk(), simulateRiskBucket(), identifyConstraints() (classifies money into touchable/untouchable).
+These appear in the "Ping & Settings" tab with an "AI" badge and are fully editable.
 
+Users also have 5 default rules (pre-loaded, non-AI):
+- Variable spending exceeds plan budget
+- Cash drops below 2 months of expenses
+- Risk score exceeds safe zone (default 60)
+- Allocation drifts from plan by more than 10%
+- Monthly progress check-in (30-day interval)
 
+Each rule has: enable/disable toggle, description, threshold input, interval input (for check-ins). Users can add custom rules or delete non-AI rules.
 
-Rebalancer Agent: Core engine. Takes stress results, constraint map, goal weights, and generates 3 reallocation plans. Tools: generateRebalancingPlans(), computeTradeoffs(), projectTimeline().
+Delivery Preferences:
+- Ping window: start time / end time
+- Frequency: realtime | daily digest | weekly digest
+- Channels: in-app (toggle), SMS (toggle), push (toggle)
 
+Layer A.2 — Client-Side Agent Checks + Toast Pings (✅ DONE)
 
+Pure function `runAgentChecks(state)` in `src/lib/engine/agent-checks.ts` evaluates all enabled notification rules against the live app state:
+- Spending cap: actual variable spending vs active plan's budget threshold
+- Liquidity floor: cash balance vs months-of-fixed-expenses threshold
+- Risk score: stress result score vs configured threshold
+- Allocation drift: actual vs planned allocation percentages
+- Scheduled check-in: time since last check-in vs interval
 
-Guardrail Agent: After user selects a plan, configures monitoring rules. Tools: deploySpendingCap(), deployLiquidityAlert(), deployReallocationOpportunity(), scheduleCheckIn().
+Toast notification system (`src/components/notifications/toast-ping.tsx` + `src/contexts/toast-context.tsx`):
+- iPhone-style slide-in banners at top-right with CSS animation
+- Severity-based styling (urgent=red, warning=amber, info=blue)
+- Ping sound on appearance (base64-embedded chime)
+- Auto-dismiss after 6 seconds with progress timer bar
+- Stack up to 3 visible simultaneously
+- Click to dismiss
 
+Two trigger paths:
+1. "Simulate Expense Spike" button (Overview tab, visible when plan active): inflates variable expenses 35-50%, runs agent checks, fires toasts. Does NOT persist fake data.
+2. "Refresh from Plaid" button (Overview tab, visible when Plaid connected): pulls fresh balances/transactions, updates profile, auto-runs agent checks if plan active, fires toasts for any breached rules.
 
+Layer B — n8n External Automation (🔲 PLANNED)
 
-Explainer Agent: LLM-powered. Generates all plain-language output -- situation summaries, option tradeoffs, guardrail explanations, notification messages. Tools: explainSituation(), explainOption(), explainAlert().
+5 n8n workflows will call Next.js monitoring API routes:
+1. Spending Monitor (daily) → GET /api/monitor/spending
+2. Liquidity Monitor (daily) → GET /api/monitor/liquidity
+3. Reallocation Opportunity (weekly) → GET /api/monitor/reallocation
+4. Drift Detection (weekly) → GET /api/monitor/drift
+5. Scheduled Check-In (per rule interval) → POST /api/notifications/checkin
 
-Human-in-the-Loop Checkpoints
+API routes are already implemented (stub endpoints ready). n8n integration is the next phase.
 
 
-
-
-
-Goal confirmation: After risk event declared, AI confirms user's goals are still accurate before rebalancing
-
-
-
-Plan selection: User reviews 3 options and selects one (or asks "what if" follow-ups)
-
-
-
-Guardrail approval: User reviews proposed monitoring rules before activation
-
-
-
-Ongoing overrides: User can dismiss any alert or re-trigger rebalancing at any time
-
-
-
-Part 7: Notification and Automation System (MVP) -- Powered by n8n
-
-After the user selects a rebalancing plan, the Guardrail Agent configures monitoring rules. n8n workflows run on schedule and call Next.js monitoring API routes to check the user's state and create notifications.
-
-5 n8n Workflows
-
-
-
-
-
-Spending Monitor (runs daily)
-
-
-
-
-
-Calls GET /api/monitor/spending
-
-
-
-Checks: actual variable spending this month vs. plan cap
-
-
-
-If >80% of cap: creates "Spending Limit Alert" -- "You've spent $1,450 of your $1,800 variable spending budget this month. $350 remaining for 12 days."
-
-
-
-Multi-step: if alert not dismissed in 48h and spending >100% cap, creates escalated alert suggesting plan re-evaluation
-
-
-
-Liquidity Monitor (runs daily)
-
-
-
-
-
-Calls GET /api/monitor/liquidity
-
-
-
-Checks: cash buffer vs. threshold (e.g., <1 month of fixed expenses)
-
-
-
-If below: creates "Liquidity Warning" -- "Your cash buffer has dropped to $2,100 -- that's less than 1 month of fixed expenses. Consider reviewing your plan."
-
-
-
-Reallocation Opportunity (runs weekly)
-
-
-
-
-
-Calls GET /api/monitor/reallocation
-
-
-
-Checks: investment portfolio growth vs. projected growth
-
-
-
-If outperforming: creates "Reallocation Opportunity" -- "Your investments grew 3.2% this month. Would you like to redirect $200 of gains toward paying off your medical bill 2 weeks sooner?"
-
-
-
-Drift Detection (runs weekly)
-
-
-
-
-
-Calls GET /api/monitor/drift
-
-
-
-Checks: actual spending by category vs. plan allocation
-
-
-
-If any category >10% over plan: creates "Drift Alert" -- "Your entertainment spending is 35% higher than your plan. This could delay your medical expense payoff by 2 weeks."
-
-
-
-Scheduled Check-In (runs every 30 days after plan activation)
-
-
-
-
-
-Calls POST /api/notifications/checkin
-
-
-
-Creates progress summary: "It's been 30 days since your rebalancing plan started. Your medical bill is now 40% paid off. Would you like to review your plan?"
-
-Architecture
-
-
-
-
-
-n8n workflows call Next.js API routes via HTTP -- clean separation
-
-
-
-API routes read from the database, compute thresholds, return structured data
-
-
-
-n8n applies branching logic (escalation, follow-up timing) and calls POST /api/notifications to create alerts
-
-
-
-Notifications displayed in-app (banner/toast + notification center page)
-
-
-
-All notifications are dismissible. The user is never locked out.
-
-
-
-n8n hosted on n8n Cloud (free tier: 5 workflows) or self-hosted on Railway
-
-
-
+═══════════════════════════════════════════════════════════════
 Part 8: System Layers Summary
-
-Layer 1 -- Financial State Layer
-
-
-
-
-
-Income allocation bucket model (% split across expenses, investments, savings goal, cash buffer, discretionary)
-
-
-
-AI-suggested initial allocation based on goals
-
-
-
-Manual input forms (monthly) + optional Plaid auto-import
-
-
-
-Baseline financial snapshot (net worth, cash flow, savings rate, risk score)
-
-Layer 2 -- Risk Engine
-
-
-
-
-
-4 risk buckets: Income Shock, Expense Shock, Market Shock, Structural Drift
-
-
-
-Configurable parameters (severity, duration, lump sum)
-
-
-
-Constraint identification (hard/soft/pausable/redirectable money)
-
-
-
-Stress outputs: burn rate, runway, depletion timeline, risk score delta
-
-Layer 3 -- Constraint-Aware Rebalancer
-
-
-
-
-
-Takes stress results + constraint map + goal weights
-
-
-
-Generates 3 reallocation plans (one per goal weight maximization)
-
-
-
-Each plan: exact dollar reallocation, timeline, goal impact, monthly budget breakdown
-
-
-
-Projected state at 6/12/24 months
-
-Layer 4 -- Guardrail Agents + n8n Automation
-
-
-
-
-
-5 monitoring API routes exposed by Next.js (spending, liquidity, reallocation, drift, check-in)
-
-
-
-5 n8n workflows that call these routes on schedule (daily/weekly/30-day)
-
-
-
-Multi-step branching logic in n8n (escalation if alerts not addressed)
-
-
-
-Spending limit alerts, liquidity warnings, reallocation opportunity nudges, drift alerts, scheduled check-ins
-
-
-
-All notifications created via API, displayed in-app
-
-Layer 5 -- Behavioral Profile (MVP-Lite)
-
-
-
-
-
-Path/plan selection history
-
-
-
-Override frequency
-
-
-
-Risk archetype suggestion after 3+ sessions
-
-
-
-Weight recalibration nudges
-
-Cross-Cutting: Explainability
-
-
-
-
-
-Every output has a plain-language explanation via the Explainer Agent
-
-
-
-Conversational in chat, structured on dashboard
-
-
-
-Part 9: User Stories
+═══════════════════════════════════════════════════════════════
+
+Layer 1 — Financial State Layer (✅ DONE)
+- Income allocation bucket model (% split, always sums to 100)
+- AI-suggested initial allocation with auto-adjust linked sliders
+- Manual input forms + Plaid auto-import + demo data fast path
+- Financial snapshot dashboard (income, expenses, portfolio, cash, surplus)
+
+Layer 2 — Risk Engine (✅ DONE)
+- 4 risk buckets: Income Shock, Expense Shock, Market Shock, Structural Drift
+- Context-aware natural language parsing (money, percent, duration, interest rates)
+- Inline editing + AI chat refinement with revert capability
+- Constraint identification (hard/soft/pausable/redirectable/liquidity)
+- Stress outputs: burn rate, runway, depletion timeline, risk score delta
+
+Layer 3 — Constraint-Aware Rebalancer (✅ DONE)
+- Takes stress results + constraint map + goal weights
+- Generates 3 reallocation plans (one per goal weight maximization)
+- Each plan: dollar reallocation, timeline, goal impact, budget breakdown
+- Projected net position at 6/12/24 months
+- Metric definitions toggle (liquidity runway, risk score, monthly deficit)
+
+Layer 4 — Guardrail Agents + Notification System (✅ IN-APP DONE, 🔲 n8n PLANNED)
+- AI auto-generates plan-specific notification rules on activation
+- Threshold-based rules (spending cap, liquidity floor, risk score, drift, check-in)
+- All rules editable in dedicated Ping & Settings tab
+- Delivery preferences: time window, frequency, channels
+- 5 monitoring API routes implemented (stubs ready for n8n)
+- In-app notification center with active/dismissed feeds
+- Client-side agent check engine (`runAgentChecks()`) evaluates all enabled rules against current state
+- Toast ping notifications: iPhone-style slide-in banners with severity colors, ping sound, 6s auto-dismiss, stack up to 3
+- "Simulate Expense Spike" demo button: inflates variable spending 35-50%, runs agent checks, fires toasts
+- Plaid Refresh on dashboard: pulls latest data, auto-triggers agent checks if plan active, toasts for breached thresholds
+
+Layer 5 — Behavioral Profile (🔲 MVP-LITE PLANNED)
+- Plan selection history recorded (via RECORD_PLAN_SELECTION action)
+- Override count tracked
+- Risk archetype detection after 3+ sessions (planned)
+- Weight recalibration nudges (planned)
+
+Cross-Cutting: Explainability (✅ DONE)
+- GPT-4o chat companion with full financial context
+- System prompt explicitly states it has full access to user data
+- Every stress metric has a plain-language definition
+- Rebalancing plans include tradeoff summaries
+
+
+═══════════════════════════════════════════════════════════════
+Part 9: User Stories — Implementation Status
+═══════════════════════════════════════════════════════════════
 
 Onboarding and Allocation Setup
 
-
-
-
-
-US-1: As a user, I want to enter my monthly income, fixed expenses, and financial goals so that the AI can suggest how to allocate my income across buckets.
-
-
-
-US-2: As a user, I want the AI to suggest a starting income allocation (% to expenses, investments, savings goal, cash buffer, discretionary) based on my goals so I have a reasonable starting point.
-
-
-
-US-3: As a user, I want to adjust the AI-suggested allocation to match my preferences before confirming.
-
-
-
-US-4: As a user, I want to set my goal weights (Lifestyle, Savings Goal, Investment Discipline) on a slider so the AI knows what matters most to me.
-
-
-
-US-5: As a user, I want the option to connect my bank accounts via Plaid so my data is auto-populated, or I want to type everything in manually.
-
-
-
-US-6: As a user, I want to see a summary dashboard of my allocation, goals, and baseline financial health after onboarding.
+- US-1: ✅ Multi-step onboarding wizard (8 steps), income streams, fixed/variable expenses, investments, savings goal, cash
+- US-2: ✅ AI suggests allocation via `suggestAllocation()`, always sums to 100%
+- US-3: ✅ Allocation editor with auto-adjust linked sliders (moving one redistributes others)
+- US-4: ✅ 3 goal weight sliders always visible, dynamically labeled
+- US-5: ✅ Plaid Link (sandbox), Demo Data button, or manual entry
+- US-6: ✅ Financial snapshot dashboard on Overview tab
 
 Risk Event Declaration
 
-
-
-
-
-US-7: As a user, I want to declare a risk event by clicking a risk card (e.g., "Job Loss," "Medical Expense") and configuring its parameters (severity, duration, amount) so the AI can assess impact.
-
-
-
-US-8: As a user, I want to describe my situation in plain language via the chat companion (e.g., "I lost my job and have a $15K medical bill") and have the AI extract the right risk parameters.
-
-
-
-US-9: As a user, I want to declare compound risk events (e.g., job loss + medical expense simultaneously) so the AI models the combined impact.
-
-
-
-US-10: As a user, after declaring a risk event, I want the AI to confirm whether my financial goals are still accurate before generating rebalancing options.
+- US-7: ✅ 4 risk bucket cards with AI-guided parameter extraction
+- US-8: ✅ Natural language input with context-aware parsing (handles "5% interest on $10,000", "6 weeks", etc.)
+- US-9: ✅ Compound risk events supported (multiple active events)
+- US-10: ✅ AI shows parsed suggestion, user edits/confirms before adding
 
 Constraint-Aware Rebalancing
 
-
-
-
-
-US-11: As a user, I want to see 3 rebalancing options -- one maximizing lifestyle, one maximizing investment discipline, one maximizing my savings goal -- so I can compare tradeoffs.
-
-
-
-US-12: As a user, for each rebalancing option, I want to see: exact dollar reallocation per bucket, timeline to resolve the expense, impact on each goal, and a projected monthly budget during the crisis.
-
-
-
-US-13: As a user, I want the AI to explain each option in plain language (e.g., "To keep your lifestyle close to normal, we would pause investments and redirect savings...") so I understand the tradeoffs without doing math.
-
-
-
-US-14: As a user, I want to select a rebalancing option and have the system confirm my choice before changing anything.
-
-
-
-US-15: As a user, I want to ask follow-up "what if" questions in the chat (e.g., "What if the medical bill is $20K instead?") and see updated options.
+- US-11: ✅ 3 rebalancing options always generated (Lifestyle / Investments / Savings or Risk Payoff)
+- US-12: ✅ Each plan: dollar reallocation, timeline, goal impact, budget breakdown, projections
+- US-13: ✅ Plain-language tradeoff summaries + metric definitions toggle
+- US-14: ✅ Plan selection with confirmation and activation notification
+- US-15: ✅ AI chat companion for follow-up questions (sidebar)
 
 Guardrails and Notifications
 
-
-
-
-
-US-16: As a user, after selecting a rebalancing plan, I want the system to monitor my spending and notify me if I'm approaching my adjusted spending limit.
-
-
-
-US-17: As a user, I want to receive a notification if my cash buffer drops below a safe threshold.
-
-
-
-US-18: As a user, I want to receive a notification if there's an opportunity to accelerate paying off my expense (e.g., investment gains that could be redirected).
-
-
-
-US-19: As a user, I want scheduled check-in notifications (e.g., every 30 days) asking me to review my plan.
-
-
-
-US-20: As a user, I want to dismiss any notification or override any guardrail so I always remain in control.
+- US-16: ✅ Spending cap alert rules (AI-generated + custom)
+- US-17: ✅ Liquidity floor rules with configurable threshold
+- US-18: 🔲 Reallocation opportunity detection (API stub ready, n8n planned)
+- US-19: ✅ Scheduled check-in rules with configurable interval
+- US-20: ✅ All notifications dismissible, all rules toggle-able
 
 Chat Companion
 
-
-
-
-
-US-21: As a user, I want a persistent chat sidebar where I can ask questions about my financial situation, risk scores, or rebalancing options at any time.
-
-
-
-US-22: As a user, I want the chat to explain any element on the dashboard in plain language when I ask about it.
+- US-21: ✅ Persistent chat sidebar with GPT-4o, full context, scrollable
+- US-22: ✅ Chat explains metrics, plans, and financial state with actual numbers
 
 Behavioral Profile
 
-
-
-
-
-US-23: As a user, after multiple sessions, I want the system to identify my financial behavior pattern and suggest whether my goal weights should be adjusted.
-
-
-
-Part 10: Functional Requirements
-
-FR-1: Financial Data Input and Allocation
-
-
-
-
-
-FR-1.1: System shall provide a multi-step onboarding wizard for manual entry of: monthly take-home income, fixed expenses (itemized), variable expenses (categorized estimates), investment portfolio (value, allocation %, monthly contribution), savings goal (name, target amount, target date, current balance, monthly contribution), and cash buffer balance.
-
-
-
-FR-1.2: System shall model income as an allocation across 5 buckets: Fixed Expenses, Variable Expenses (Discretionary), Investments, Savings Goal, Cash Buffer -- expressed as percentages of monthly income.
-
-
-
-FR-1.3: System shall use an AI agent to suggest an initial allocation split based on the user's income, fixed expenses, and stated goals.
-
-
-
-FR-1.4: System shall allow the user to adjust the AI-suggested allocation before confirming.
-
-
-
-FR-1.5: System shall provide a "Connect Accounts" option launching Plaid Link (Sandbox mode). If connected, auto-populate financial data and allow user corrections.
-
-
-
-FR-1.6: System shall compute and display: net worth, monthly cash flow, savings rate, baseline risk score, and an allocation pie chart.
-
-FR-2: Goal Weight System
-
-
-
-
-
-FR-2.1: System shall allow the user to set 3 goal weights via sliders: Lifestyle Maximization, Savings Goal Maximization, Investment Discipline Maximization.
-
-
-
-FR-2.2: Weights shall be on a 1-10 scale, normalized internally to sum to 1.
-
-
-
-FR-2.3: The AI shall suggest starting weights based on the user's stated primary goal and provide a rationale.
-
-
-
-FR-2.4: The user shall be able to override AI-suggested weights at any time.
-
-FR-3: Risk Event Declaration
-
-
-
-
-
-FR-3.1: System shall support 4 risk buckets: Income Shock, Expense Shock, Market Shock, Structural Drift.
-
-
-
-FR-3.2: Each bucket shall accept configurable parameters via structured cards: severity (% or $), duration (months or "unknown"), and lump sum amount where applicable.
-
-
-
-FR-3.3: System shall support compound risk events (multiple simultaneous buckets).
-
-
-
-FR-3.4: The chat companion shall accept natural-language risk declarations and extract structured parameters (bucket type, severity, duration, amount).
-
-
-
-FR-3.5: After risk event declaration, the AI shall confirm the user's goals before proceeding to rebalancing.
-
-FR-4: Constraint-Aware Rebalancing Engine
-
-
-
-
-
-FR-4.1: Upon risk event, the Risk Agent shall classify all money into constraint categories: hard constraints (cannot touch -- fixed expenses), soft constraints (can reduce -- variable expenses), pausable (investment contributions), redirectable (savings goal contributions), and available liquidity (cash buffer + accessible savings).
-
-
-
-FR-4.2: The Rebalancer Agent shall generate exactly 3 reallocation plans, one maximizing each goal weight: (1) Maximize Lifestyle, (2) Maximize Investment Discipline, (3) Maximize Savings Goal.
-
-
-
-FR-4.3: Each plan shall include: exact dollar reallocation per bucket per month, timeline to resolve the immediate expense, quantified impact on each goal (delay in months or shortfall in $), projected monthly budget during the crisis, and projected financial state at 6/12/24 months.
-
-
-
-FR-4.4: Each plan shall include a plain-language tradeoff summary generated by the Explainer Agent.
-
-
-
-FR-4.5: The user shall select a plan via the dashboard or chat. System shall confirm the selection before activating.
-
-FR-5: Guardrail, Notification, and Automation System
-
-
-
-
-
-FR-5.1: After plan selection, the Guardrail Agent shall configure monitoring rules based on the plan's budget constraints.
-
-
-
-FR-5.2: System shall generate 5 notification types: Spending Limit Alert, Liquidity Warning, Reallocation Opportunity, Scheduled Check-In (30 days), and Drift Alert.
-
-
-
-FR-5.3: Notifications shall be displayed in-app (banner/toast + notification center page).
-
-
-
-FR-5.4: All notifications shall be dismissible. User can disable specific notification types.
-
-
-
-FR-5.5: System shall expose monitoring API routes: /api/monitor/spending, /api/monitor/liquidity, /api/monitor/reallocation, /api/monitor/drift, /api/notifications/checkin.
-
-
-
-FR-5.6: n8n shall run 5 automated workflows that periodically call the monitoring API routes: Spending Monitor (daily), Liquidity Monitor (daily), Reallocation Opportunity (weekly), Drift Detection (weekly), Scheduled Check-In (every 30 days after plan activation).
-
-
-
-FR-5.7: n8n workflows shall support multi-step branching (e.g., spending >80% cap -> alert; if no dismissal in 48h -> follow-up alert; if >120% cap -> trigger drift alert + plan re-evaluation suggestion).
-
-
-
-FR-5.8: Monitoring API routes shall return structured data; n8n decides whether to create a notification based on thresholds and branching logic.
-
-FR-6: Chat Companion
-
-
-
-
-
-FR-6.1: System shall provide a persistent chat sidebar accessible from all pages.
-
-
-
-FR-6.2: Chat shall support: risk event declaration (natural language to structured parameters), "what if" scenario exploration, explanation requests for any dashboard element, and rebalancing plan Q&A.
-
-
-
-FR-6.3: Chat responses shall be generated by the Explainer Agent using an LLM.
-
-
-
-FR-6.4: Chat shall pre-fill structured UI elements when the user describes a scenario (e.g., typing "job loss" pre-fills the Income Shock card).
-
-FR-7: Agentic AI Orchestration
-
-
-
-
-
-FR-7.1: System shall use an Orchestrator Agent to route data between Risk Agent, Rebalancer Agent, Guardrail Agent, and Explainer Agent.
-
-
-
-FR-7.2: Orchestrator shall enforce human-in-the-loop checkpoints at: goal confirmation, plan selection, guardrail approval.
-
-
-
-FR-7.3: All agent inputs and outputs shall be logged with timestamps for audit/explainability.
-
-
-
-FR-7.4: Agent errors shall fail gracefully -- structured UI remains functional even if the LLM/chat is unavailable.
-
-FR-8: Behavioral Profile (MVP-Lite)
-
-
-
-
-
-FR-8.1: System shall record: plan selections, goal weight changes, notification dismissals, and override decisions.
-
-
-
-FR-8.2: After 3+ sessions, system shall suggest a risk archetype and recommend weight adjustments if observed behavior diverges from stated weights.
-
-
-
-Part 11: Recommended Tech Stack (MVP) -- FINAL
-
-
-
-
-
-Frontend: Next.js 14+ (App Router) + React + TypeScript + Tailwind CSS + shadcn/ui
-
-
-
-Chat UI: Vercel AI SDK (useChat hook) for streaming chat responses
-
-
-
-Backend API: Next.js API Routes (all TypeScript, no separate backend)
-
-
-
-Risk/Rebalancer Engine: TypeScript (deterministic math, no NumPy needed for MVP)
-
-
-
-Agentic AI: Vercel AI SDK with OpenAI tool-calling -- agents are implemented as tools the LLM can invoke (simulateRiskBucket, generateRebalancingPlans, etc.)
-
-
-
-LLM: OpenAI API (GPT-4o) for Explainer Agent, chat companion, and allocation suggestions
-
-
-
-Plaid: @plaid/plaid-node SDK (Sandbox) + react-plaid-link component
-
-
-
-Database: SQLite via Prisma (local MVP) -- stores user profiles, plans, decision logs, notification state
-
-
-
-Visualization: Recharts for allocation pie charts, depletion timelines, budget breakdowns
-
-
-
-Notifications: In-app via React context/state + notification center page
-
-
-
-Automation: n8n (Cloud free tier or self-hosted on Railway) -- 5 workflows for spending monitoring, liquidity checks, reallocation opportunities, drift detection, scheduled check-ins
-
-
-
-Deployment: Vercel (frontend + API routes + serverless functions) + n8n Cloud (automation workflows)
-
-
-
-Part 12: MVP Scope Boundaries
-
-In scope for MVP:
-
-
-
-
-
-Manual financial data input (monthly format) with AI-suggested allocation
-
-
-
-Goal weight sliders (Lifestyle, Savings Goal, Investment Discipline)
-
-
-
-Optional Plaid connection (Sandbox mode)
-
-
-
-4 risk buckets with configurable parameters + compound events
-
-
-
-Constraint-aware rebalancing: 3 options per risk event
-
-
-
-Hybrid UX: structured dashboard + persistent chat companion
-
-
-
-Agentic AI orchestration with human-in-the-loop
-
-
-
-Plain-language explainability via LLM
-
-
-
-5 n8n automation workflows (spending monitor, liquidity monitor, reallocation opportunity, drift detection, scheduled check-in)
-
-
-
-5 notification types with multi-step branching (in-app)
-
-
-
-Monitoring API routes called by n8n
-
-
-
-Demo-ready UI
+- US-23: 🔲 Archetype detection planned after 3+ sessions
+
+
+═══════════════════════════════════════════════════════════════
+Part 10: Actual Tech Stack (as built)
+═══════════════════════════════════════════════════════════════
+
+- Frontend: Next.js 16.1.6 (App Router, Turbopack) + React 19.2.3 + TypeScript 5 + Tailwind CSS 4 + shadcn/ui
+- Chat UI: Vercel AI SDK (`@ai-sdk/react` useChat hook + `DefaultChatTransport`) for streaming responses
+- Backend API: Next.js API Routes (all TypeScript)
+- Risk/Rebalancer Engine: TypeScript deterministic math (`src/lib/engine/risk-engine.ts`, `src/lib/engine/rebalancer.ts`)
+- LLM: OpenAI API (GPT-4o) via `@ai-sdk/openai` — powers chat companion
+- Plaid: `plaid` ^41.3.0 + `react-plaid-link` ^4.1.1 (Sandbox environment)
+- State Persistence: `localStorage` via React Context + `useReducer` (no database yet)
+- UI Components: shadcn/ui (button, card, input, label, slider, tabs, badge, dialog, progress, scroll-area, separator, sheet, tooltip)
+- Icons: lucide-react
+- Deployment: Local development (Vercel deployment ready)
+
+DEVIATION FROM ORIGINAL PLAN:
+- Using localStorage instead of SQLite/Prisma for MVP speed. Prisma schema exists but models not yet defined.
+- No Recharts visualizations yet (allocation bar is custom CSS).
+- n8n workflows not yet connected (monitoring API stubs are ready).
+- Agent architecture is flatter than planned — orchestration happens in React components rather than a formal multi-agent system. The chat companion is a single GPT-4o call with rich system prompts, not a tool-calling agent chain.
+
+
+═══════════════════════════════════════════════════════════════
+Part 11: File Architecture
+═══════════════════════════════════════════════════════════════
+
+pfre/
+├── sandbox/
+│   └── plaid-custom-user.json          # Custom Plaid sandbox data (Toronto-based)
+├── src/
+│   ├── app/
+│   │   ├── layout.tsx                   # Root layout with AppProvider
+│   │   ├── page.tsx                     # Root page (onboarding vs dashboard, hydration guard)
+│   │   └── api/
+│   │       ├── chat/route.ts            # GPT-4o chat with full financial context
+│   │       ├── monitor/
+│   │       │   ├── spending/route.ts    # Spending monitor endpoint (stub)
+│   │       │   ├── liquidity/route.ts   # Liquidity monitor endpoint (stub)
+│   │       │   ├── reallocation/route.ts# Reallocation opportunity endpoint (stub)
+│   │       │   └── drift/route.ts       # Drift detection endpoint (stub)
+│   │       ├── notifications/
+│   │       │   └── checkin/route.ts      # Scheduled check-in endpoint (stub)
+│   │       └── plaid/
+│   │           ├── create-link-token/route.ts  # Creates Plaid Link token
+│   │           ├── exchange-token/route.ts     # Exchanges public token, fetches all data
+│   │           ├── autofill/route.ts           # Refreshes Plaid data with existing token
+│   │           ├── investments/route.ts        # Investment holdings endpoint
+│   │           └── sandbox-token/route.ts      # Creates sandbox token with custom user
+│   ├── components/
+│   │   ├── account/account-page.tsx            # Recalculate + chat history
+│   │   ├── chat/chat-sidebar.tsx               # Persistent AI chat (native scroll)
+│   │   ├── dashboard/
+│   │   │   ├── allocation-chart.tsx            # (placeholder)
+│   │   │   ├── allocation-editor.tsx           # Auto-adjust sliders, AI suggest
+│   │   │   ├── dashboard-layout.tsx            # 6-tab layout + chat sidebar + simulate spike + Plaid refresh
+│   │   │   ├── financial-snapshot.tsx           # Overview metrics
+│   │   │   └── savings-goal-card.tsx            # Savings goal display + Plaid link
+│   │   ├── notifications/
+│   │   │   ├── notification-center.tsx          # Active/dismissed notification feed
+│   │   │   └── toast-ping.tsx                   # iPhone-style slide-in toast banner + ping sound
+│   │   ├── onboarding/onboarding-wizard.tsx     # 8-step wizard
+│   │   ├── plaid/plaid-link-button.tsx          # Plaid Link trigger
+│   │   ├── rebalancing/rebalancing-panel.tsx    # 3 plan cards + AI activation
+│   │   ├── risk/
+│   │   │   ├── depletion-chart.tsx              # (placeholder)
+│   │   │   └── risk-event-panel.tsx             # AI-guided risk flow
+│   │   ├── settings/notification-settings-card.tsx # Threshold rules + delivery prefs
+│   │   └── ui/ (14 shadcn primitives)
+│   ├── contexts/
+│   │   ├── app-context.tsx                      # Global state (useReducer + localStorage)
+│   │   └── toast-context.tsx                    # Toast queue provider + showToast() API
+│   └── lib/
+│       ├── engine/
+│       │   ├── agent-checks.ts                  # Client-side rule evaluation engine
+│       │   ├── rebalancer.ts                    # 3-plan generation engine
+│       │   └── risk-engine.ts                   # Stress test + baseline risk
+│       ├── store.ts                             # State schema, defaults, suggestAllocation
+│       ├── types.ts                             # All TypeScript interfaces
+│       └── utils.ts                             # cn() utility
+
+
+═══════════════════════════════════════════════════════════════
+Part 12: MVP Scope Boundaries (Updated)
+═══════════════════════════════════════════════════════════════
+
+In scope for MVP (✅ DONE):
+
+- Manual financial data input with AI-suggested allocation (always 100%)
+- Demo data fast path (custom Plaid Sandbox user with rich Toronto-based transactions)
+- Goal weight sliders (3, always visible, dynamically labeled)
+- Plaid connection (Sandbox mode) with improved expense classification
+- 4 risk buckets with context-aware NLP parsing + compound events
+- Constraint-aware rebalancing: 3 options per risk event (always generated)
+- AI-guided risk flow with inline chat history, editable suggestions, revert
+- Hybrid UX: 6-tab dashboard + persistent chat companion
+- GPT-4o chat with full financial context (never says "I don't have access")
+- Metric definitions and ranges toggle on rebalancing tab
+- AI-generated notification rules on plan activation
+- Threshold-based ping settings (spending cap, liquidity floor, risk score, drift, check-in)
+- Dedicated Ping & Settings tab with delivery preferences
+- In-app notification center (active/dismissed)
+- Account page with recalculate and chat Q&A history
+- Auto-adjust linked allocation sliders
+- 5 monitoring API route stubs
+- Hydration-safe SSR rendering
+- Client-side agent check engine with 5 rule evaluators
+- Toast ping notifications (iPhone-style banners with sound)
+- "Simulate Expense Spike" demo button for showcasing notification flow
+- Dashboard "Refresh from Plaid" button with auto agent checks + toasts
+
+In scope for MVP (🔲 NEXT):
+
+- n8n workflow integration (5 automated monitors calling API routes)
+- Recharts visualizations (allocation pie chart, depletion timeline)
+- SQLite/Prisma persistence (replace localStorage)
+- Behavioral archetype detection after 3+ sessions
+- Weight recalibration nudges
 
 Out of scope for MVP (future iterations):
 
+- Real Plaid Production credentials
+- Email/SMS/push notification delivery (UI toggles exist, backend channels need n8n)
+- Real dividend/portfolio growth tracking (MVP uses simplified growth %)
+- Canadian tax account specifics (TFSA/RRSP/FHSA)
+- Multi-user authentication / accounts
+- Mobile app
+- Real-time transaction monitoring via Plaid webhooks
+- Full multi-agent orchestration (current: flat component-driven, future: tool-calling agent chain)
 
 
+═══════════════════════════════════════════════════════════════
+Part 13: Key Design Decisions & Rationale
+═══════════════════════════════════════════════════════════════
 
+1. localStorage over SQLite/Prisma: Speed of iteration. No migration overhead during rapid prototyping. Prisma can be added when multi-user support is needed.
 
-Real Plaid Production credentials
+2. Flat component architecture over formal agent system: The original plan called for an Orchestrator → Agent chain. In practice, React components + API routes provide the same flow with less abstraction overhead for an MVP. The chat companion is a single GPT-4o call with a rich system prompt rather than a tool-calling agent. This can be upgraded to tool-calling when needed.
 
+3. Custom Plaid Sandbox user over generic test data: Generic Plaid sandbox data is sparse and not Canadian. The custom user JSON (`plaid-custom-user.json`) creates a realistic Toronto-based financial profile with specific vendors, investment holdings, and a student loan — making demos significantly more compelling.
 
+4. Auto-adjust allocation sliders: Instead of allowing the user to set arbitrary values and showing an error, sliders are linked — moving one automatically redistributes others proportionally. This prevents the "doesn't add to 100%" frustration.
 
-Email/SMS notifications (n8n can add these easily in v2)
+5. Context-aware follow-up parsing: The original `applyFollowupToEvent()` applied parsed numbers to ALL fields. This caused bugs like "actually it's $10,000" setting both lumpSum AND duration to 10000. The fix uses keyword detection to determine which field the user is talking about and only updates that one.
 
+6. AI system prompt assertiveness: GPT-4o would sometimes say "I don't have access to your financial data" despite the full profile being in the system prompt. The fix was to explicitly state "You DO have access" and "Never say you don't have access" in the system prompt.
 
+7. Native scroll over Radix ScrollArea: The `ScrollArea` component from radix-ui didn't reliably auto-scroll to new messages. Replaced with native `overflow-y-auto` + a scroll-to-bottom ref for the chat sidebar.
 
-Real dividend/portfolio growth tracking (MVP uses simplified growth %)
+8. Client-side agent checks over server-side API polling: For instant demo feedback, `runAgentChecks()` runs entirely in the browser against the React state. No network round-trip needed. The existing monitoring API routes remain as stubs for future n8n server-side polling — both paths can coexist.
 
-
-
-Canadian tax account specifics (TFSA/RRSP/FHSA)
-
-
-
-Multi-user authentication / accounts
-
-
-
-Mobile app
-
-
-
-Real-time transaction monitoring via Plaid webhooks
-
+9. Simulated expense spike as non-persistent: The "Simulate Expense Spike" button inflates variable expenses temporarily (35-50%) but does NOT write the fake data to state. This lets the user repeatedly demo the notification flow without corrupting their profile.

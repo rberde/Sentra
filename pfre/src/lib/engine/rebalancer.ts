@@ -52,17 +52,18 @@ function buildPlan(
   reallocation: BucketReallocation,
   description: string,
 ): RebalancingPlan {
-  const adjustedIncome = Math.max(0, profile.monthlyIncome - (stress.adjustedMonthlyBurn - stress.baselineMonthlyBurn));
-  const effectiveIncome = Math.max(0, adjustedIncome > profile.monthlyIncome ? profile.monthlyIncome : adjustedIncome);
+  const effectiveIncome = stress.adjustedIncome;
 
   const freeablePerMonth = (
     stress.constraintMap.softConstraints - reallocation.variableExpenses +
     stress.constraintMap.pausable - reallocation.investments +
     stress.constraintMap.redirectable - reallocation.savingsGoal
   );
-  const timelineToResolve = freeablePerMonth > 0 && stress.additionalExpense > 0
-    ? Math.ceil(stress.additionalExpense / freeablePerMonth)
-    : 0;
+  const monthlyGap = Math.max(0, reallocation.fixedExpenses + reallocation.variableExpenses - effectiveIncome);
+  const totalPressure = stress.additionalExpense > 0 ? stress.additionalExpense : monthlyGap * stress.crisisDurationMonths;
+  const timelineToResolve = freeablePerMonth > 0 && totalPressure > 0
+    ? Math.ceil(totalPressure / freeablePerMonth)
+    : monthlyGap > 0 ? stress.crisisDurationMonths : 0;
 
   const originalMonthlyInvContrib = profile.investments.monthlyContribution;
   const originalMonthlySavContrib = profile.savingsGoal?.monthlyContribution ?? 0;
@@ -113,9 +114,27 @@ export function generateRebalancingPlans(
   const cm = stress.constraintMap;
   const hasSavingsGoal = profile.savingsGoal !== null;
 
-  const amountNeeded = Math.max(stress.adjustedMonthlyBurn - Math.max(0, profile.monthlyIncome - (stress.adjustedMonthlyBurn - stress.baselineMonthlyBurn)), 0);
+  // Monthly pressure: the actual gap between what you spend and what you earn after the shock.
+  // For income shocks (job loss), income drops → big recurring gap even if expenses don't change.
+  // For expense shocks, expenses rise or there's a lump sum → spread over crisis horizon.
+  const recurringGap = Math.max(0, stress.adjustedMonthlyBurn - stress.adjustedIncome);
+  const lumpSumPressure = stress.additionalExpense > 0
+    ? stress.additionalExpense / Math.max(1, stress.crisisDurationMonths)
+    : 0;
+  const rawNeeded = Math.max(recurringGap, lumpSumPressure);
+  const maxFlexible = cm.softConstraints + cm.pausable + cm.redirectable;
+  const amountNeeded = Math.max(0, Math.min(rawNeeded, maxFlexible));
+  const isUnknownDuration = stress.crisisDurationMonths <= 6 && rawNeeded > 0;
 
   const formatDollars = (n: number) => `$${Math.round(n).toLocaleString()}`;
+  const hasIncomeShock = stress.adjustedIncome < profile.monthlyIncome;
+  const remainingGap = Math.max(0, rawNeeded - amountNeeded);
+  const durationLabel = stress.crisisDurationMonths <= 6
+    ? `${stress.crisisDurationMonths}-month planning horizon`
+    : `${stress.crisisDurationMonths} months`;
+  const cashRunwayNote = remainingGap > 0 && profile.cashBuffer > 0
+    ? ` Even after cuts, there's a ${formatDollars(remainingGap)}/mo shortfall that draws from your cash reserve (${Math.round(profile.cashBuffer / remainingGap)} months of runway).`
+    : "";
 
   // ── Plan 1: Maximize Lifestyle ──
   const lifestylePausable = Math.min(cm.pausable, amountNeeded);
@@ -133,11 +152,11 @@ export function generateRebalancingPlans(
   const plans: RebalancingPlan[] = [
     buildPlan(
       "maximize_lifestyle",
-      "Maximize Lifestyle",
+      hasIncomeShock ? "Short-Term: Preserve Lifestyle" : "Maximize Lifestyle",
       profile,
       stress,
       lifestylePlan,
-      `To keep your lifestyle as close to normal as possible, we would pause ${formatDollars(lifestylePausable)}/month in investment contributions${lifestyleRedirectable > 0 ? ` and redirect ${formatDollars(lifestyleRedirectable)}/month from your savings goal` : ""} to cover expenses. Your variable spending stays at ${formatDollars(lifestylePlan.variableExpenses)}/month (${cm.softConstraints > 0 ? Math.round((lifestylePlan.variableExpenses / cm.softConstraints) * 100) : 100}% of current). ${lifestylePlan.investments === 0 ? "Investment contributions pause entirely." : `Investments continue at ${formatDollars(lifestylePlan.investments)}/month.`}`,
+      `${hasIncomeShock ? `During your income disruption (${durationLabel}), this plan ` : "This plan "}keeps your lifestyle as close to normal as possible by pausing ${formatDollars(lifestylePausable)}/month in investment contributions${lifestyleRedirectable > 0 ? ` and redirecting ${formatDollars(lifestyleRedirectable)}/month from your savings goal` : ""}. Variable spending stays at ${formatDollars(lifestylePlan.variableExpenses)}/month (${cm.softConstraints > 0 ? Math.round((lifestylePlan.variableExpenses / cm.softConstraints) * 100) : 100}% of current). ${lifestylePlan.investments === 0 ? "Investment contributions pause entirely." : `Investments continue at ${formatDollars(lifestylePlan.investments)}/month.`}${cashRunwayNote}${hasIncomeShock ? " Best if you expect to recover income within a few months." : ""}`,
     ),
   ];
 
@@ -157,15 +176,15 @@ export function generateRebalancingPlans(
   plans.push(
     buildPlan(
       "maximize_investments",
-      "Maximize Investments",
+      hasIncomeShock ? "Medium-Term: Protect Investments" : "Maximize Investments",
       profile,
       stress,
       investPlan,
-      `To keep your investments on track, we would cut variable spending from ${formatDollars(cm.softConstraints)} to ${formatDollars(investPlan.variableExpenses)}/month${investRedirectable > 0 ? ` and redirect ${formatDollars(investRedirectable)}/month from your savings goal` : ""}. Investments continue at ${formatDollars(investPlan.investments)}/month. Lifestyle impact is significant during the crisis period.`,
+      `${hasIncomeShock ? `Over the ${durationLabel}, this plan ` : "This plan "}keeps your investments on track by cutting variable spending from ${formatDollars(cm.softConstraints)} to ${formatDollars(investPlan.variableExpenses)}/month${investRedirectable > 0 ? ` and redirecting ${formatDollars(investRedirectable)}/month from your savings goal` : ""}. Investments continue at ${formatDollars(investPlan.investments)}/month. Lifestyle impact is significant during the crisis.${cashRunwayNote}${hasIncomeShock ? " Best if you want to maintain long-term growth even during the disruption." : ""}`,
     ),
   );
 
-  // ── Plan 3: Savings-goal priority OR fastest risk payoff if no savings goal ──
+  // ── Plan 3: Savings-goal priority OR fastest risk payoff ──
   const savingsPausable = Math.min(cm.pausable, amountNeeded);
   const savingsVariableCut = hasSavingsGoal
     ? Math.min(cm.softConstraints * 0.4, Math.max(0, amountNeeded - savingsPausable))
@@ -183,13 +202,15 @@ export function generateRebalancingPlans(
   plans.push(
     buildPlan(
       "maximize_savings_goal",
-      hasSavingsGoal ? "Maximize Savings Goal" : "Maximize Risk Payoff",
+      hasSavingsGoal
+        ? (hasIncomeShock ? "Long-Term: Protect Savings Goal" : "Maximize Savings Goal")
+        : (hasIncomeShock ? "Long-Term: Maximum Survival" : "Maximize Risk Payoff"),
       profile,
       stress,
       savingsPlan,
       hasSavingsGoal
-        ? `To keep your savings goal "${profile.savingsGoal!.name}" on track, we would pause ${formatDollars(savingsPausable)}/month in investment contributions and cut variable spending to ${formatDollars(savingsPlan.variableExpenses)}/month. Savings contributions continue at ${formatDollars(savingsPlan.savingsGoal)}/month. ${savingsPlan.investments === 0 ? "Investment contributions pause entirely." : `Investments continue at ${formatDollars(savingsPlan.investments)}/month.`}`
-        : `To pay off risk as fast as possible, we prioritize aggressive cuts to variable spending (down to ${formatDollars(savingsPlan.variableExpenses)}/month) and pause as much investing as needed (${formatDollars(savingsPausable)}/month). This option maximizes short-term stability and speeds up expense resolution.`,
+        ? `${hasIncomeShock ? `For a sustained income loss (${durationLabel}+), this plan ` : "This plan "}keeps your savings goal "${profile.savingsGoal!.name}" on track by pausing ${formatDollars(savingsPausable)}/month in investments and cutting variable spending to ${formatDollars(savingsPlan.variableExpenses)}/month. Savings contributions continue at ${formatDollars(savingsPlan.savingsGoal)}/month.${cashRunwayNote}${hasIncomeShock ? " Best if you want to stay on track for your goal even through a tough period." : ""}`
+        : `${hasIncomeShock ? `For a prolonged income loss (${durationLabel}+), this plan ` : "This plan "}makes the most aggressive cuts: variable spending down to ${formatDollars(savingsPlan.variableExpenses)}/month, investments paused by ${formatDollars(savingsPausable)}/month. Maximizes cash preservation and extends your runway as long as possible.${cashRunwayNote}${hasIncomeShock ? " Best if you need to stretch every dollar until you're back on your feet." : ""}`,
     ),
   );
 
@@ -217,7 +238,7 @@ export function generateRebalancingPlans(
       ? `Recommended based on your goal weights — your highest priority is ${
           p.type === "maximize_lifestyle" ? "maintaining your lifestyle"
           : p.type === "maximize_investments" ? "investment discipline"
-          : `reaching your savings goal "${profile.savingsGoal?.name}"`
+          : hasSavingsGoal ? `reaching your savings goal "${profile.savingsGoal?.name}"` : "paying down risk quickly"
         }.`
       : undefined,
   }));

@@ -6,7 +6,6 @@ import { DefaultChatTransport } from "ai";
 import { useApp } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, Send, Bot, User, Loader2 } from "lucide-react";
 
 interface Props {
@@ -20,9 +19,9 @@ interface DisplayMessage {
 }
 
 export function ChatSidebar({ onClose }: Props) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollEndRef = useRef<HTMLDivElement>(null);
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/chat",
@@ -35,14 +34,14 @@ export function ChatSidebar({ onClose }: Props) {
     },
   }), [state.profile, state.riskEvents, state.stressResult, state.rebalancingPlans, state.selectedPlanId]);
 
-  const { messages: chatMessages, sendMessage, status } = useChat({ transport });
+  const { messages: chatMessages, sendMessage, status, error } = useChat({ transport });
 
   const isLoading = status === "streaming" || status === "submitted";
 
   const welcomeMessage: DisplayMessage = {
     id: "welcome",
     role: "assistant",
-    text: `Hi${state.profile?.name ? ` ${state.profile.name}` : ""}! I'm your AI financial risk advisor. I can help you:\n\n- Declare risk events — Tell me what happened (e.g., "I lost my job")\n- Explain your numbers — Ask about your risk score, runway, or any metric\n- Compare options — Ask me to explain the tradeoffs between rebalancing plans\n- What-if scenarios — "What if the medical bill is $20K instead of $15K?"\n\nWhat's on your mind?`,
+    text: `Hi${state.profile?.name ? ` ${state.profile.name}` : ""}! I'm your AI financial risk advisor. I have full access to your financial profile, risk events, and rebalancing plans. I can help you:\n\n- Declare risk events — Tell me what happened (e.g., "I lost my job")\n- Explain your numbers — Ask about your risk score, runway, or any metric\n- Compare options — Ask me to explain the tradeoffs between rebalancing plans\n- What-if scenarios — "What if the medical bill is $20K instead of $15K?"\n\nWhat's on your mind?`,
   };
 
   const displayMessages: DisplayMessage[] = [
@@ -57,11 +56,25 @@ export function ChatSidebar({ onClose }: Props) {
     })).filter(m => m.text && (m.role === "user" || m.role === "assistant")),
   ];
 
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [displayMessages.length]);
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [displayMessages.length, isLoading]);
+
+  useEffect(() => {
+    const history = chatMessages
+      .map(msg => ({
+        id: msg.id,
+        role: msg.role as "user" | "assistant",
+        content: msg.parts
+          ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
+          .map(p => p.text)
+          .join("") || "",
+        createdAt: new Date().toISOString(),
+      }))
+      .filter(m => m.content && (m.role === "user" || m.role === "assistant"));
+    dispatch({ type: "SET_CHAT_HISTORY", history });
+  }, [chatMessages, dispatch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +85,7 @@ export function ChatSidebar({ onClose }: Props) {
 
   return (
     <div className="fixed right-0 top-14 bottom-0 w-96 bg-white border-l shadow-xl flex flex-col z-30">
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center">
             <Bot className="w-4 h-4 text-primary-foreground" />
@@ -84,7 +97,8 @@ export function ChatSidebar({ onClose }: Props) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+      {/* Scrollable message area — uses native overflow instead of ScrollArea for reliable scrolling */}
+      <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {displayMessages.map(msg => (
             <div key={msg.id} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
@@ -119,10 +133,16 @@ export function ChatSidebar({ onClose }: Props) {
               </div>
             </div>
           )}
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+              AI assistant is unavailable right now. Please retry in a few seconds.
+            </div>
+          )}
+          <div ref={scrollEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t">
+      <form onSubmit={handleSubmit} className="p-4 border-t shrink-0">
         <div className="flex gap-2">
           <Input
             value={input}

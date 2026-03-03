@@ -1,0 +1,123 @@
+{
+  "name": "PFRE — All Checks (Daily)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.PFRE_BASE_URL || 'http://localhost:3000'}}/api/n8n/evaluate",
+        "options": { "timeout": 10000 },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/json" }
+          ]
+        }
+      },
+      "id": "http-evaluate",
+      "name": "Evaluate All Checks",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.totalAlerts }}",
+              "operation": "largerEqual",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "if-alerts",
+      "name": "Any Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.first().json;\nconst fired = data.alerts.filter(a => a.alert);\nconst lines = fired.map(a => `• [${a.severity.toUpperCase()}] ${a.title}: ${a.message}`);\n\nreturn [{\n  json: {\n    subject: `PFRE Alert: ${data.totalAlerts} check(s) need attention`,\n    body: `Hi ${data.profileName},\\n\\n${lines.join('\\n')}\\n\\nPlan: ${data.planName || 'None'}\\nLast synced: ${data.lastSyncedAt}\\n\\n— PFRE Agent`,\n    slackText: `:warning: *PFRE Alert* — ${data.totalAlerts} check(s):\\n${lines.join('\\n')}`,\n    totalAlerts: data.totalAlerts,\n    channels: data.notificationPreferences.channels,\n    profileName: data.profileName\n  }\n}];"
+      },
+      "id": "format-message",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 200]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "channel": "={{ $env.SLACK_CHANNEL || '#pfre-alerts' }}",
+        "text": "={{ $json.slackText }}"
+      },
+      "id": "slack-notify",
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1100, 120],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.EMAIL_FROM || 'pfre@example.com' }}",
+        "toEmail": "={{ $env.EMAIL_TO || 'user@example.com' }}",
+        "subject": "={{ $json.subject }}",
+        "text": "={{ $json.body }}"
+      },
+      "id": "email-notify",
+      "name": "Email Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1100, 280],
+      "disabled": true
+    },
+    {
+      "parameters": {},
+      "id": "no-alerts",
+      "name": "No Alerts — Skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [860, 400]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [[{ "node": "Evaluate All Checks", "type": "main", "index": 0 }]]
+    },
+    "Evaluate All Checks": {
+      "main": [[{ "node": "Any Alerts?", "type": "main", "index": 0 }]]
+    },
+    "Any Alerts?": {
+      "main": [
+        [{ "node": "Format Alert Message", "type": "main", "index": 0 }],
+        [{ "node": "No Alerts — Skip", "type": "main", "index": 0 }]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          { "node": "Slack Notification", "type": "main", "index": 0 },
+          { "node": "Email Notification", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [{ "name": "PFRE" }]
+}
