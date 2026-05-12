@@ -1,5 +1,6 @@
 import type { AppState } from "@/lib/store";
 import type { Notification, NotificationRule } from "@/lib/types";
+import { spendingThresholdPercent } from "@/lib/monitoring";
 
 /**
  * Evaluates all enabled notification rules against the current app state.
@@ -68,7 +69,7 @@ function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notificatio
   if (planBudget <= 0) return null;
 
   const actualSpending = ctx.totalVariable;
-  const thresholdPct = rule.threshold ?? 100;
+  const thresholdPct = spendingThresholdPercent(rule, planBudget);
   const cap = planBudget * (thresholdPct / 100);
 
   if (actualSpending <= cap) return null;

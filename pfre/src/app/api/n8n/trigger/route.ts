@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: "ok",
       n8nResponse: result,
-      forwardedTo: n8nWebhookUrl,
+      forwarded: true,
     });
   } catch (error) {
     console.error("n8n trigger error:", error);

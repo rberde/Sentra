@@ -229,16 +229,16 @@ export function RebalancingPanel() {
     const cashMonths = totalFixed > 0 ? Math.floor((state.profile?.cashBuffer ?? 0) / totalFixed) : 3;
     const aiRules = [
       {
-        id: `ai_spending_${Date.now()}`,
+        id: crypto.randomUUID(),
         type: "spending_cap" as const,
         label: `Variable spending over $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/mo`,
         description: `Alert if your variable spending exceeds the ${plan.name} plan budget of $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/month.`,
         enabled: true,
-        threshold: plan.monthlyReallocation.variableExpenses,
+        threshold: 100,
         aiGenerated: true,
       },
       {
-        id: `ai_liquidity_${Date.now()}`,
+        id: crypto.randomUUID(),
         type: "liquidity_floor" as const,
         label: `Cash drops below ${Math.max(1, cashMonths - 1)} months of expenses`,
         description: `Alert when your cash can cover fewer than ${Math.max(1, cashMonths - 1)} months of fixed expenses ($${totalFixed.toLocaleString()}/mo).`,
@@ -247,7 +247,7 @@ export function RebalancingPanel() {
         aiGenerated: true,
       },
       {
-        id: `ai_risk_score_${Date.now()}`,
+        id: crypto.randomUUID(),
         type: "risk_score_alert" as const,
         label: `Risk score crosses ${state.stressResult ? Math.min(90, state.stressResult.riskScoreAfter + 10) : 70}`,
         description: "Alert when your risk score rises further above the current level.",
@@ -256,7 +256,7 @@ export function RebalancingPanel() {
         aiGenerated: true,
       },
       {
-        id: `ai_checkin_${Date.now()}`,
+        id: crypto.randomUUID(),
         type: "scheduled_checkin" as const,
         label: "Bi-weekly plan progress check-in",
         description: `The AI agent will review your spending vs. the ${plan.name} plan every 14 days.`,
