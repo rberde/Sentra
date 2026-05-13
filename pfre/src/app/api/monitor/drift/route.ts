@@ -27,7 +27,6 @@ export async function GET() {
     });
   }
 
-  const income = (profile.monthlyIncome as number) ?? 0;
   const fixedExpenses = (profile.fixedExpenses as Array<{ amount: number }>) ?? [];
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const investments = profile.investments as { totalValue: number; monthlyContribution: number } | undefined;
@@ -37,9 +36,9 @@ export async function GET() {
   const actualInvestment = investments?.monthlyContribution ?? 0;
 
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const plannedFixed = reallocation ? Math.round(income * (reallocation.fixedExpenses ?? 0) / 100) : 0;
-  const plannedVariable = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 0) / 100) : 0;
-  const plannedInvestment = reallocation ? Math.round(income * (reallocation.investments ?? 0) / 100) : 0;
+  const plannedFixed = reallocation ? Math.round(reallocation.fixedExpenses ?? 0) : 0;
+  const plannedVariable = reallocation ? Math.round(reallocation.variableExpenses ?? 0) : 0;
+  const plannedInvestment = reallocation ? Math.round(reallocation.investments ?? 0) : 0;
 
   const categories = [
     { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: plannedFixed > 0 ? Math.round(Math.abs(actualFixed - plannedFixed) / plannedFixed * 100) : 0 },
