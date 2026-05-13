@@ -14,6 +14,8 @@ import type {
 } from "@/lib/types";
 import { type AppState, loadState, saveState } from "@/lib/store";
 
+const EXCLUDED_SYNC_KEYS = new Set(["chatHistory", "plaidAccessToken"]);
+
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
   | { type: "SET_ONBOARDING_COMPLETE"; complete: boolean }
@@ -143,7 +145,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, plaidAccessToken: _t, ...syncable } = state;
+      const syncable = Object.fromEntries(
+        Object.entries(state).filter(([key]) => !EXCLUDED_SYNC_KEYS.has(key)),
+      );
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
