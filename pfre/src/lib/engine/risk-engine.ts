@@ -79,6 +79,22 @@ function applyStructuralDrift(profile: UserProfile, event: RiskEvent): { monthly
   return { monthlyExpenseIncrease: increase };
 }
 
+function applyLiquidityDrawdown(profile: UserProfile, amount: number): { cashBuffer: number; savingsBalance: number } {
+  let cashBuffer = profile.cashBuffer;
+  let savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
+  let remainingDrawdown = amount;
+
+  const cashDrawdown = Math.min(cashBuffer, remainingDrawdown);
+  cashBuffer -= cashDrawdown;
+  remainingDrawdown -= cashDrawdown;
+
+  if (remainingDrawdown > 0) {
+    savingsBalance = Math.max(0, savingsBalance - remainingDrawdown);
+  }
+
+  return { cashBuffer, savingsBalance };
+}
+
 export function simulateRiskBucket(
   profile: UserProfile,
   scenario: CompoundRiskScenario,
@@ -124,10 +140,8 @@ export function simulateRiskBucket(
   const monthlyDeficit = adjustedBurn - adjustedIncome;
   const stressedPortfolio = Math.max(0, profile.investments.totalValue - portfolioLoss);
 
-  let liquidityPool = constraints.availableLiquidity;
-  if (totalLumpSum > 0) {
-    liquidityPool = Math.max(0, liquidityPool - totalLumpSum);
-  }
+  const stressedLiquidity = applyLiquidityDrawdown(profile, totalLumpSum);
+  const liquidityPool = stressedLiquidity.cashBuffer + stressedLiquidity.savingsBalance;
 
   const liquidityRunway = monthlyDeficit > 0 ? liquidityPool / monthlyDeficit : 99;
 
@@ -172,8 +186,22 @@ export function simulateRiskBucket(
 
   const stressedProfile: UserProfile = {
     ...profile,
-    cashBuffer: liquidityPool,
+    cashBuffer: stressedLiquidity.cashBuffer,
     investments: { ...profile.investments, totalValue: stressedPortfolio },
+    savingsGoal: profile.savingsGoal
+      ? { ...profile.savingsGoal, currentBalance: stressedLiquidity.savingsBalance }
+      : null,
+    variableExpenses: additionalMonthlyExpense + monthlyExpenseIncrease > 0
+      ? [
+          ...profile.variableExpenses,
+          {
+            name: "Stress expense increase",
+            amount: additionalMonthlyExpense + monthlyExpenseIncrease,
+            category: "other",
+            type: "variable",
+          },
+        ]
+      : profile.variableExpenses,
     monthlyIncome: adjustedIncome,
   };
   const stressedRisk = calculateBaselineRisk(stressedProfile);
