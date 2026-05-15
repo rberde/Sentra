@@ -143,7 +143,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, plaidAccessToken: _t, ...syncable } = state;
+      const syncable: Record<string, unknown> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

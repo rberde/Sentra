@@ -19,7 +19,9 @@ export async function readServerState(): Promise<Record<string, unknown> | null>
 }
 
 export function sanitizeServerState(state: Record<string, unknown>): Record<string, unknown> {
-  const { chatHistory: _chatHistory, plaidAccessToken: _plaidAccessToken, ...syncableState } = state;
+  const syncableState = { ...state };
+  delete syncableState.chatHistory;
+  delete syncableState.plaidAccessToken;
   return syncableState;
 }
 
