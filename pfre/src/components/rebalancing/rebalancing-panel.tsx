@@ -234,7 +234,7 @@ export function RebalancingPanel() {
         label: `Variable spending over $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/mo`,
         description: `Alert if your variable spending exceeds the ${plan.name} plan budget of $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/month.`,
         enabled: true,
-        threshold: plan.monthlyReallocation.variableExpenses,
+        threshold: 100,
         aiGenerated: true,
       },
       {
