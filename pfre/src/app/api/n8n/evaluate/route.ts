@@ -53,10 +53,14 @@ export async function GET(req: Request) {
 
   const alerts: Alert[] = [];
   const shouldRun = (name: string) => !requestedChecks || requestedChecks.includes(name);
+  const driftPct = (actual: number, planned: number) => {
+    if (planned <= 0) return actual > 0 ? 100 : 0;
+    return Math.round((Math.abs(actual - planned) / planned) * 100);
+  };
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
+    const variableCap = Math.round(reallocation.variableExpenses ?? 0);
     const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
@@ -112,15 +116,11 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
-
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
+      { name: "Fixed", actual: totalFixed, planned: reallocation.fixedExpenses ?? 0 },
+      { name: "Variable", actual: totalVariable, planned: reallocation.variableExpenses ?? 0 },
+      { name: "Investments", actual: investments?.monthlyContribution ?? 0, planned: reallocation.investments ?? 0 },
+    ].map(d => ({ ...d, drift: driftPct(d.actual, d.planned) }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
