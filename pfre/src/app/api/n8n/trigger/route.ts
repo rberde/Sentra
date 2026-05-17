@@ -34,6 +34,18 @@ export async function POST(req: Request) {
 
     const result = await response.json().catch(() => ({ status: response.status }));
 
+    if (!response.ok) {
+      return NextResponse.json(
+        {
+          status: "error",
+          message: "n8n webhook rejected the alert payload",
+          n8nStatus: response.status,
+          n8nResponse: result,
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json({
       status: "ok",
       n8nResponse: result,
