@@ -8,7 +8,6 @@ import { Loader2, Link as LinkIcon, CheckCircle } from "lucide-react";
 import type { Expense, PlaidAccount } from "@/lib/types";
 
 export type PlaidExchangePayload = {
-  access_token: string;
   accounts: PlaidAccount[];
   autofill?: {
     cashBuffer?: number;
@@ -68,7 +67,6 @@ export function PlaidLinkButton({ onSuccess: onSuccessCallback }: { onSuccess?: 
       dispatch({
         type: "SET_PLAID_ACCOUNTS",
         accounts: data.accounts,
-        accessToken: data.access_token,
       });
       setConnected(true);
       onSuccessCallback?.(data);

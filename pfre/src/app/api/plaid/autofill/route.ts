@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { readPlaidAccessToken } from "@/lib/plaid-token-store";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -15,13 +16,13 @@ const plaidClient = new PlaidApi(config);
 
 export async function POST(req: Request) {
   try {
-    const { access_token } = await req.json();
-    if (!access_token) {
-      return NextResponse.json({ error: "Missing access token" }, { status: 400 });
+    const accessToken = await readPlaidAccessToken(req);
+    if (!accessToken) {
+      return NextResponse.json({ error: "No Plaid connection available" }, { status: 401 });
     }
 
     const accountsResponse = await plaidClient.accountsGet({
-      access_token,
+      access_token: accessToken,
     });
 
     const accounts = accountsResponse.data.accounts.map(a => ({
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
     let expensesReason = "Imported from Plaid transactions.";
 
     try {
-      const txResponse = await getTransactionsWithRetry(access_token, startDate, endDate);
+      const txResponse = await getTransactionsWithRetry(accessToken, startDate, endDate);
 
       const estimates = buildExpenseEstimates(txResponse.data.transactions);
       fixedExpenses = estimates.fixedExpenses;
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
 
     try {
       const holdingsResponse = await plaidClient.investmentsHoldingsGet({
-        access_token,
+        access_token: accessToken,
       });
       const secMap = new Map(
         holdingsResponse.data.securities.map(s => [s.security_id, s]),

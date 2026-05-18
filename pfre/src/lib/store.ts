@@ -70,7 +70,8 @@ export function loadState(): AppState {
     }
     // Ensure new fields exist
     if (parsed.plaidAccounts === undefined) parsed.plaidAccounts = [];
-    if (parsed.plaidAccessToken === undefined) parsed.plaidAccessToken = null;
+    // Plaid access tokens are server-only secrets; clear any value saved by older clients.
+    parsed.plaidAccessToken = null;
     if (parsed.chatHistory === undefined) parsed.chatHistory = [];
     if (parsed.notificationSettings === undefined) {
       parsed.notificationSettings = defaultState().notificationSettings;

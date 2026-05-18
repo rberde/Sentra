@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { readPlaidAccessToken } from "@/lib/plaid-token-store";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -15,13 +16,13 @@ const plaidClient = new PlaidApi(config);
 
 export async function POST(req: Request) {
   try {
-    const { access_token } = await req.json();
-    if (!access_token) {
-      return NextResponse.json({ error: "Missing access token" }, { status: 400 });
+    const accessToken = await readPlaidAccessToken(req);
+    if (!accessToken) {
+      return NextResponse.json({ error: "No Plaid connection available" }, { status: 401 });
     }
 
     const holdingsResponse = await plaidClient.investmentsHoldingsGet({
-      access_token,
+      access_token: accessToken,
     });
 
     const securities = holdingsResponse.data.securities;
@@ -76,7 +77,7 @@ export async function POST(req: Request) {
       const endDate = new Date();
 
       const txResponse = await plaidClient.investmentsTransactionsGet({
-        access_token,
+        access_token: accessToken,
         start_date: startDate.toISOString().slice(0, 10),
         end_date: endDate.toISOString().slice(0, 10),
       });
