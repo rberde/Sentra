@@ -19,5 +19,7 @@ export async function readServerState(): Promise<Record<string, unknown> | null>
 }
 
 export async function writeServerState(state: Record<string, unknown>): Promise<void> {
-  await fs.writeFile(STATE_FILE, JSON.stringify(state), "utf-8");
+  const safeState = { ...state };
+  delete safeState.plaidAccessToken;
+  await fs.writeFile(STATE_FILE, JSON.stringify(safeState), "utf-8");
 }

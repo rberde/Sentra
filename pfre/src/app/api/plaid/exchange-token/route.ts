@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { PLAID_SESSION_COOKIE, savePlaidAccessToken } from "@/lib/plaid-token-store";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -129,8 +130,8 @@ export async function POST(req: Request) {
       // Liabilities product may not be available for this item
     }
 
-    return NextResponse.json({
-      access_token: accessToken,
+    const sessionToken = await savePlaidAccessToken(accessToken);
+    const response = NextResponse.json({
       accounts,
       autofill: {
         cashBuffer,
@@ -147,6 +148,14 @@ export async function POST(req: Request) {
         expensesReason,
       },
     });
+    response.cookies.set(PLAID_SESSION_COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 90,
+    });
+    return response;
   } catch (error: unknown) {
     console.error("Plaid exchange error:", error);
     return NextResponse.json({ error: "Failed to exchange token" }, { status: 500 });

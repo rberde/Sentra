@@ -28,7 +28,7 @@ type Action =
   | { type: "DISMISS_NOTIFICATION"; notificationId: string }
   | { type: "RECORD_PLAN_SELECTION"; planType: PlanType }
   | { type: "INCREMENT_OVERRIDE" }
-  | { type: "SET_PLAID_ACCOUNTS"; accounts: PlaidAccount[]; accessToken: string }
+  | { type: "SET_PLAID_ACCOUNTS"; accounts: PlaidAccount[]; accessToken?: string | null }
   | { type: "SET_CHAT_HISTORY"; history: ChatMessage[] }
   | { type: "SET_NOTIFICATION_SETTINGS"; settings: NotificationSettings }
   | { type: "RESET_STATE" };
@@ -82,7 +82,7 @@ function reducer(state: AppState, action: Action): AppState {
         },
       };
     case "SET_PLAID_ACCOUNTS":
-      return { ...state, plaidAccounts: action.accounts, plaidAccessToken: action.accessToken };
+      return { ...state, plaidAccounts: action.accounts, plaidAccessToken: null };
     case "SET_CHAT_HISTORY":
       return { ...state, chatHistory: action.history };
     case "SET_NOTIFICATION_SETTINGS":
@@ -143,7 +143,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

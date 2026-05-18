@@ -1,4 +1,6 @@
 .DS_Store
 node_modules/
+.pfre-plaid-token.json
 pfre/node_modules/
 pfre/.env.local
+pfre/.pfre-plaid-token.json

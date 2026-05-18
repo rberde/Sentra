@@ -240,7 +240,6 @@ export function OnboardingWizard() {
     accounts?: PlaidAccount[];
     autofill?: PlaidExchangePayload["autofill"];
     autofillMeta?: PlaidExchangePayload["autofillMeta"];
-    access_token?: string;
   }) => {
     const autofill = payload.autofill;
     if (!autofill) return;
@@ -299,12 +298,10 @@ export function OnboardingWizard() {
       setHasSavingsGoal(true);
     }
 
-    const accessToken = "access_token" in payload ? payload.access_token : state.plaidAccessToken;
-    if (payload.accounts && accessToken) {
+    if (payload.accounts) {
       dispatch({
         type: "SET_PLAID_ACCOUNTS",
         accounts: payload.accounts,
-        accessToken,
       });
     }
 
@@ -333,14 +330,13 @@ export function OnboardingWizard() {
   };
 
   const refreshFromPlaid = async () => {
-    if (!state.plaidAccessToken) return;
+    if (state.plaidAccounts.length === 0) return;
     setAutoRefreshTried(true);
     setRefreshingPlaid(true);
     try {
       const res = await fetch("/api/plaid/autofill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: state.plaidAccessToken }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error("Failed to refresh Plaid data");
@@ -381,13 +377,13 @@ export function OnboardingWizard() {
 
   useEffect(() => {
     if (step !== 1) return;
-    if (!state.plaidAccessToken) return;
+    if (state.plaidAccounts.length === 0) return;
     if (autoRefreshTried || refreshingPlaid) return;
     if (profile.fixedExpenses.length > 0 || profile.variableExpenses.length > 0) return;
     void refreshFromPlaid();
   }, [
     step,
-    state.plaidAccessToken,
+    state.plaidAccounts.length,
     autoRefreshTried,
     refreshingPlaid,
     profile.fixedExpenses.length,

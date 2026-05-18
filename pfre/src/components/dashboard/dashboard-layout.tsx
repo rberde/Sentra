@@ -94,13 +94,12 @@ export function DashboardLayout() {
   };
 
   const handleRefreshPlaid = useCallback(async () => {
-    if (!state.plaidAccessToken || !state.profile) return;
+    if (state.plaidAccounts.length === 0 || !state.profile) return;
     setRefreshingPlaid(true);
     try {
       const res = await fetch("/api/plaid/autofill", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: state.plaidAccessToken }),
       });
       if (!res.ok) throw new Error("Failed to refresh Plaid data");
       const data = await res.json();
@@ -230,7 +229,7 @@ export function DashboardLayout() {
                   <AllocationEditor />
                   <SavingsGoalCard />
                 </div>
-                {state.plaidAccessToken && (
+                {state.plaidAccounts.length > 0 && (
                   <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
                     <div className="shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
                       <RefreshCw className={`w-5 h-5 text-blue-600 ${refreshingPlaid ? "animate-spin" : ""}`} />
