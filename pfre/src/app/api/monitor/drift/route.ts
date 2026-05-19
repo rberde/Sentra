@@ -37,15 +37,21 @@ export async function GET() {
   const actualInvestment = investments?.monthlyContribution ?? 0;
 
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const plannedFixed = reallocation ? Math.round(income * (reallocation.fixedExpenses ?? 0) / 100) : 0;
-  const plannedVariable = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 0) / 100) : 0;
-  const plannedInvestment = reallocation ? Math.round(income * (reallocation.investments ?? 0) / 100) : 0;
+  const plannedFixed = reallocation ? Math.round(reallocation.fixedExpenses ?? 0) : 0;
+  const plannedVariable = reallocation ? Math.round(reallocation.variableExpenses ?? 0) : 0;
+  const plannedInvestment = reallocation ? Math.round(reallocation.investments ?? 0) : 0;
+  const toIncomePct = (amount: number) => income > 0 ? (amount / income) * 100 : 0;
 
   const categories = [
-    { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: plannedFixed > 0 ? Math.round(Math.abs(actualFixed - plannedFixed) / plannedFixed * 100) : 0 },
-    { name: "Variable Expenses", actual: actualVariable, planned: plannedVariable, driftPct: plannedVariable > 0 ? Math.round(Math.abs(actualVariable - plannedVariable) / plannedVariable * 100) : 0 },
-    { name: "Investments", actual: actualInvestment, planned: plannedInvestment, driftPct: plannedInvestment > 0 ? Math.round(Math.abs(actualInvestment - plannedInvestment) / plannedInvestment * 100) : 0 },
-  ];
+    { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed },
+    { name: "Variable Expenses", actual: actualVariable, planned: plannedVariable },
+    { name: "Investments", actual: actualInvestment, planned: plannedInvestment },
+  ].map(c => ({
+    ...c,
+    actualPct: Math.round(toIncomePct(c.actual)),
+    plannedPct: Math.round(toIncomePct(c.planned)),
+    driftPct: Math.round(Math.abs(toIncomePct(c.actual) - toIncomePct(c.planned))),
+  }));
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
   const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
