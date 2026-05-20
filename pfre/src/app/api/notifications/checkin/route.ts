@@ -30,9 +30,13 @@ export async function POST() {
   const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
   const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
 
-  // Use plan activation time or last sync as reference
-  const planCreated = (activePlan.createdAt as string) ?? (state.lastSyncedAt as string) ?? new Date().toISOString();
-  const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
+  // Plan activation is recorded as a scheduled_checkin notification.
+  const notifications = (state.notifications ?? []) as Array<Record<string, unknown>>;
+  const lastCheckin = notifications
+    .filter(n => n.type === "scheduled_checkin" && typeof n.createdAt === "string")
+    .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())[0];
+  const referenceDate = (lastCheckin?.createdAt as string | undefined) ?? (activePlan.createdAt as string | undefined) ?? new Date().toISOString();
+  const daysSince = Math.floor((Date.now() - new Date(referenceDate).getTime()) / (1000 * 60 * 60 * 24));
   const nextCheckinDue = daysSince >= intervalDays;
 
   const profile = state.profile as Record<string, unknown> | null;
