@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
+    const variableCap = Math.round(reallocation.variableExpenses ?? 0);
     const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
@@ -112,15 +112,18 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
+    const toIncomePct = (amount: number) => income > 0 ? (amount / income) * 100 : 0;
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
+      { name: "Fixed", actual: toIncomePct(totalFixed), planned: toIncomePct(reallocation.fixedExpenses ?? 0) },
+      { name: "Variable", actual: toIncomePct(totalVariable), planned: toIncomePct(reallocation.variableExpenses ?? 0) },
+      { name: "Investments", actual: toIncomePct(investments?.monthlyContribution ?? 0), planned: toIncomePct(reallocation.investments ?? 0) },
+    ].map(d => ({
+      ...d,
+      actual: Math.round(d.actual),
+      planned: Math.round(d.planned),
+      drift: Math.round(Math.abs(d.actual - d.planned)),
+    }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
@@ -142,8 +145,12 @@ export async function GET(req: Request) {
   if (shouldRun("checkin") && activePlan) {
     const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
     const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
-    const planCreated = (activePlan.createdAt as string) ?? new Date().toISOString();
-    const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
+    const notifications = (state.notifications ?? []) as Array<Record<string, unknown>>;
+    const lastCheckin = notifications
+      .filter(n => n.type === "scheduled_checkin" && typeof n.createdAt === "string")
+      .sort((a, b) => new Date(b.createdAt as string).getTime() - new Date(a.createdAt as string).getTime())[0];
+    const referenceDate = (lastCheckin?.createdAt as string | undefined) ?? (profile.updatedAt as string | undefined) ?? new Date().toISOString();
+    const daysSince = Math.floor((Date.now() - new Date(referenceDate).getTime()) / (1000 * 60 * 60 * 24));
     const due = daysSince >= intervalDays;
     alerts.push({
       check: "checkin",
