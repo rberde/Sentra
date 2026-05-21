@@ -49,8 +49,16 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, riskEvents: [], stressResult: null, rebalancingPlans: [], selectedPlanId: null };
     case "SET_STRESS_RESULT":
       return { ...state, stressResult: action.result };
-    case "SET_REBALANCING_PLANS":
-      return { ...state, rebalancingPlans: action.plans };
+    case "SET_REBALANCING_PLANS": {
+      const currentPlan = state.rebalancingPlans.find(p => p.id === state.selectedPlanId);
+      const selectedPlanId =
+        action.plans.some(p => p.id === state.selectedPlanId)
+          ? state.selectedPlanId
+          : currentPlan
+            ? action.plans.find(p => p.type === currentPlan.type)?.id ?? null
+            : null;
+      return { ...state, rebalancingPlans: action.plans, selectedPlanId };
+    }
     case "SELECT_PLAN":
       return { ...state, selectedPlanId: action.planId };
     case "ADD_NOTIFICATION":
