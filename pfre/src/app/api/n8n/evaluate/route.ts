@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
+    const variableCap = Math.round(reallocation.variableExpenses ?? 0);
     const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
@@ -115,11 +115,14 @@ export async function GET(req: Request) {
     const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
     const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
     const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
+    const plannedFixedPct = income > 0 ? Math.round(((reallocation.fixedExpenses ?? 0) / income) * 100) : 0;
+    const plannedVariablePct = income > 0 ? Math.round(((reallocation.variableExpenses ?? 0) / income) * 100) : 0;
+    const plannedInvestPct = income > 0 ? Math.round(((reallocation.investments ?? 0) / income) * 100) : 0;
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
+      { name: "Fixed", actual: actualFixedPct, planned: plannedFixedPct },
+      { name: "Variable", actual: actualVariablePct, planned: plannedVariablePct },
+      { name: "Investments", actual: actualInvestPct, planned: plannedInvestPct },
     ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
