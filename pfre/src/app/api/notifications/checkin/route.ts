@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { daysSinceIso, numericRuleValue, planCheckinReferenceIso } from "@/lib/engine/monitoring";
 
 export async function POST() {
   const state = await readServerState();
@@ -28,11 +29,9 @@ export async function POST() {
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
   const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
-  const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
+  const intervalDays = numericRuleValue(checkinRule, "intervalDays", 30);
 
-  // Use plan activation time or last sync as reference
-  const planCreated = (activePlan.createdAt as string) ?? (state.lastSyncedAt as string) ?? new Date().toISOString();
-  const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
+  const daysSince = daysSinceIso(planCheckinReferenceIso(activePlan, state));
   const nextCheckinDue = daysSince >= intervalDays;
 
   const profile = state.profile as Record<string, unknown> | null;

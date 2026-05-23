@@ -150,6 +150,8 @@ export interface RebalancingPlan {
   type: PlanType;
   name: string;
   description: string;
+  createdAt?: string;
+  selectedAt?: string;
   monthlyReallocation: BucketReallocation;
   timelineToResolve: number;
   goalImpact: {

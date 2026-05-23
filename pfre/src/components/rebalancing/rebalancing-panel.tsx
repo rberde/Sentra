@@ -193,6 +193,13 @@ export function RebalancingPanel() {
   };
 
   const handleSelect = (plan: RebalancingPlan) => {
+    const selectedAt = new Date().toISOString();
+    dispatch({
+      type: "SET_REBALANCING_PLANS",
+      plans: state.rebalancingPlans.map(p =>
+        p.id === plan.id ? { ...p, selectedAt } : p,
+      ),
+    });
     dispatch({ type: "SELECT_PLAN", planId: plan.id });
     dispatch({ type: "RECORD_PLAN_SELECTION", planType: plan.type });
 
@@ -234,7 +241,7 @@ export function RebalancingPanel() {
         label: `Variable spending over $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/mo`,
         description: `Alert if your variable spending exceeds the ${plan.name} plan budget of $${plan.monthlyReallocation.variableExpenses.toLocaleString()}/month.`,
         enabled: true,
-        threshold: plan.monthlyReallocation.variableExpenses,
+        threshold: 100,
         aiGenerated: true,
       },
       {
