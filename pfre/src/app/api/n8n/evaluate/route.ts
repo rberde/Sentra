@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import {
+  amountFromReallocation,
+  daysSinceIso,
+  driftPercentPoints,
+  numericRuleValue,
+  percentUsed,
+  percentageOfIncome,
+  planCheckinReferenceIso,
+} from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -56,20 +65,20 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    const variableCap = amountFromReallocation(reallocation, "variableExpenses");
+    const spendingPercentUsed = percentUsed(totalVariable, variableCap);
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
-    const threshold = (spendingRule?.threshold as number) ?? 100;
-    const fired = percentUsed >= threshold;
+    const threshold = numericRuleValue(spendingRule, "threshold", 100);
+    const fired = spendingPercentUsed >= threshold;
     alerts.push({
       check: "spending",
       alert: fired,
-      severity: fired ? (percentUsed >= 120 ? "critical" : "warning") : "info",
+      severity: fired ? (spendingPercentUsed >= 120 ? "critical" : "warning") : "info",
       title: "Spending Monitor",
       message: fired
-        ? `Variable spending at ${percentUsed}% of plan cap ($${totalVariable} / $${variableCap}).`
-        : `Spending within budget at ${percentUsed}%.`,
-      data: { variableCap, actualSpending: totalVariable, percentUsed, threshold },
+        ? `Variable spending at ${spendingPercentUsed}% of plan cap ($${totalVariable} / $${variableCap}).`
+        : `Spending within budget at ${spendingPercentUsed}%.`,
+      data: { variableCap, actualSpending: totalVariable, percentUsed: spendingPercentUsed, threshold },
     });
   }
 
@@ -77,7 +86,7 @@ export async function GET(req: Request) {
   if (shouldRun("liquidity")) {
     const monthsOfCoverage = totalFixed > 0 ? Math.round((cashBuffer / totalFixed) * 10) / 10 : 999;
     const liquidityRule = rules.find(r => r.type === "liquidity_floor" && r.enabled);
-    const threshold = (liquidityRule?.threshold as number) ?? 2;
+    const threshold = numericRuleValue(liquidityRule, "threshold", 2);
     const fired = monthsOfCoverage < threshold;
     alerts.push({
       check: "liquidity",
@@ -96,7 +105,7 @@ export async function GET(req: Request) {
     const stress = state.stressResult as Record<string, unknown>;
     const score = (stress.riskScoreAfter as number) ?? 0;
     const riskRule = rules.find(r => r.type === "risk_score_alert" && r.enabled);
-    const threshold = (riskRule?.threshold as number) ?? 60;
+    const threshold = numericRuleValue(riskRule, "threshold", 60);
     const fired = score >= threshold;
     alerts.push({
       check: "risk_score",
@@ -112,19 +121,41 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
+    const actualInvestment = investments?.monthlyContribution ?? 0;
+    const plannedFixed = amountFromReallocation(reallocation, "fixedExpenses");
+    const plannedVariable = amountFromReallocation(reallocation, "variableExpenses");
+    const plannedInvestment = amountFromReallocation(reallocation, "investments");
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
+      {
+        name: "Fixed",
+        actual: percentageOfIncome(totalFixed, income),
+        planned: percentageOfIncome(plannedFixed, income),
+        actualAmount: totalFixed,
+        plannedAmount: plannedFixed,
+        drift: driftPercentPoints(totalFixed, plannedFixed, income),
+      },
+      {
+        name: "Variable",
+        actual: percentageOfIncome(totalVariable, income),
+        planned: percentageOfIncome(plannedVariable, income),
+        actualAmount: totalVariable,
+        plannedAmount: plannedVariable,
+        drift: driftPercentPoints(totalVariable, plannedVariable, income),
+      },
+      {
+        name: "Investments",
+        actual: percentageOfIncome(actualInvestment, income),
+        planned: percentageOfIncome(plannedInvestment, income),
+        actualAmount: actualInvestment,
+        plannedAmount: plannedInvestment,
+        drift: driftPercentPoints(actualInvestment, plannedInvestment, income),
+      },
+    ];
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
-    const threshold = (driftRule?.threshold as number) ?? 10;
+    const threshold = numericRuleValue(driftRule, "threshold", 10);
     const fired = maxDrift > threshold;
     alerts.push({
       check: "drift",
@@ -141,9 +172,8 @@ export async function GET(req: Request) {
   // 5. Scheduled check-in
   if (shouldRun("checkin") && activePlan) {
     const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
-    const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
-    const planCreated = (activePlan.createdAt as string) ?? new Date().toISOString();
-    const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
+    const intervalDays = numericRuleValue(checkinRule, "intervalDays", 30);
+    const daysSince = daysSinceIso(planCheckinReferenceIso(activePlan, state));
     const due = daysSince >= intervalDays;
     alerts.push({
       check: "checkin",

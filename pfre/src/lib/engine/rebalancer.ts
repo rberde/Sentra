@@ -90,6 +90,7 @@ function buildPlan(
     type,
     name,
     description,
+    createdAt: new Date().toISOString(),
     monthlyReallocation: reallocation,
     timelineToResolve,
     goalImpact: {
