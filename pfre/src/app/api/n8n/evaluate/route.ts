@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import {
+  buildAllocationDriftCategories,
+  calculateUsagePercent,
+  getMaxDriftPct,
+  getMonthlyPlanAmount,
+  type PlanAmounts,
+} from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -40,7 +47,7 @@ export async function GET(req: Request) {
 
   const totalFixed = fixedExpenses.reduce((s, e) => s + e.amount, 0);
   const totalVariable = variableExpenses.reduce((s, e) => s + e.amount, 0);
-  const reallocation = activePlan?.monthlyReallocation as Record<string, number> | undefined;
+  const reallocation = activePlan?.monthlyReallocation as PlanAmounts | undefined;
 
   interface Alert {
     check: string;
@@ -56,8 +63,8 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    const variableCap = getMonthlyPlanAmount(reallocation, "variableExpenses");
+    const percentUsed = calculateUsagePercent(totalVariable, variableCap);
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
     const fired = percentUsed >= threshold;
@@ -112,17 +119,15 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
-
-    const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
-
-    const maxDrift = Math.max(...drifts.map(d => d.drift));
+    const drifts = buildAllocationDriftCategories(
+      {
+        fixedExpenses: totalFixed,
+        variableExpenses: totalVariable,
+        investments: investments?.monthlyContribution ?? 0,
+      },
+      reallocation,
+    );
+    const maxDrift = getMaxDriftPct(drifts);
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
     const threshold = (driftRule?.threshold as number) ?? 10;
     const fired = maxDrift > threshold;
