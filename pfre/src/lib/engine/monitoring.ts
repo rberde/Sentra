@@ -1,6 +1,6 @@
-import type { BucketReallocation } from "@/lib/types";
-
 type DriftBucket = "fixedExpenses" | "variableExpenses" | "investments";
+type SpendingReallocation = { variableExpenses?: number };
+type DriftReallocation = Partial<Record<DriftBucket, number>>;
 
 export interface BudgetDriftCategory {
   name: string;
@@ -37,7 +37,7 @@ export function normalizeSpendingThresholdPercent(threshold: number | undefined)
 
 export function calculateSpendingUsage(
   actualSpending: number,
-  reallocation: Pick<BucketReallocation, "variableExpenses"> | undefined,
+  reallocation: SpendingReallocation | undefined,
   threshold: number | undefined,
 ): SpendingUsage {
   const variableCap = safeAmount(reallocation?.variableExpenses);
@@ -57,7 +57,7 @@ export function calculateSpendingUsage(
 export function calculateBudgetDriftCategories(
   income: number,
   actuals: Record<DriftBucket, number>,
-  reallocation: Pick<BucketReallocation, DriftBucket> | undefined,
+  reallocation: DriftReallocation | undefined,
   names: Record<DriftBucket, string> = {
     fixedExpenses: "Fixed Expenses",
     variableExpenses: "Variable Expenses",
