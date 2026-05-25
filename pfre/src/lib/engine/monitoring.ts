@@ -22,11 +22,11 @@ export interface SpendingUsage {
 const LEGACY_DOLLAR_THRESHOLD_FLOOR = 300;
 
 function safeAmount(value: number | undefined): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
 export function normalizeSpendingThresholdPercent(threshold: number | undefined): number {
-  if (!Number.isFinite(threshold) || threshold === undefined || threshold <= 0) {
+  if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold <= 0) {
     return 100;
   }
 
