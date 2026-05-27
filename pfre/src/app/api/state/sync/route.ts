@@ -4,7 +4,8 @@ import { writeServerState, readServerState } from "@/lib/server-state";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    await writeServerState(body);
+    const { plaidAccessToken: _plaidAccessToken, ...syncableState } = body;
+    await writeServerState(syncableState);
     return NextResponse.json({ status: "ok", syncedAt: new Date().toISOString() });
   } catch (error) {
     console.error("State sync error:", error);
