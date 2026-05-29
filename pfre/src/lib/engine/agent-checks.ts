@@ -68,7 +68,7 @@ function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notificatio
   if (planBudget <= 0) return null;
 
   const actualSpending = ctx.totalVariable;
-  const thresholdPct = rule.threshold ?? 100;
+  const thresholdPct = normalizeSpendingThreshold(rule.threshold);
   const cap = planBudget * (thresholdPct / 100);
 
   if (actualSpending <= cap) return null;
@@ -83,6 +83,11 @@ function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notificatio
     isDismissed: false,
     createdAt: new Date().toISOString(),
   };
+}
+
+function normalizeSpendingThreshold(threshold: number | undefined): number {
+  if (threshold === undefined) return 100;
+  return threshold > 200 ? 100 : threshold;
 }
 
 function checkLiquidityFloor(rule: NotificationRule, ctx: EvalContext): Notification | null {

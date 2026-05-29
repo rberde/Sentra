@@ -34,14 +34,13 @@ export async function GET() {
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const actualSpending = variableExpenses.reduce((s, e) => s + e.amount, 0);
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const income = (profile.monthlyIncome as number) ?? 0;
-  const variableCap = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 20) / 100) : 0;
+  const variableCap = reallocation ? Math.round(reallocation.variableExpenses ?? 0) : 0;
   const percentUsed = variableCap > 0 ? Math.round((actualSpending / variableCap) * 100) : 0;
   const daysRemaining = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate();
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
   const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
-  const threshold = (spendingRule?.threshold as number) ?? 100;
+  const threshold = normalizeSpendingThreshold(spendingRule?.threshold as number | undefined);
   const alert = percentUsed >= threshold;
 
   return NextResponse.json({
@@ -62,4 +61,9 @@ export async function GET() {
         : `Variable spending within budget at ${percentUsed}%.`,
     },
   });
+}
+
+function normalizeSpendingThreshold(threshold: number | undefined): number {
+  if (threshold === undefined) return 100;
+  return threshold > 200 ? 100 : threshold;
 }

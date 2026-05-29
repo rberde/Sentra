@@ -63,9 +63,12 @@ function applyIncomeShock(profile: UserProfile, event: RiskEvent): { incomeReduc
 }
 
 function applyExpenseShock(event: RiskEvent): { additionalMonthlyExpense: number; lumpSum: number } {
+  const amount = event.lumpSum ?? 0;
+  const isInstallmentExpense = amount > 0 && event.duration > 1;
+
   return {
-    additionalMonthlyExpense: event.lumpSum && event.duration > 0 ? event.lumpSum / event.duration : 0,
-    lumpSum: event.lumpSum ?? 0,
+    additionalMonthlyExpense: isInstallmentExpense ? amount / event.duration : 0,
+    lumpSum: isInstallmentExpense ? 0 : amount,
   };
 }
 
