@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { budgetUsagePercent, incomeSharePercent, plannedMonthlyAmount } from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -56,8 +57,8 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    const variableCap = Math.round(plannedMonthlyAmount(reallocation, "variableExpenses"));
+    const percentUsed = budgetUsagePercent(totalVariable, variableCap);
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
     const fired = percentUsed >= threshold;
@@ -112,15 +113,20 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
+    const actualFixedPct = incomeSharePercent(totalFixed, income);
+    const actualVariablePct = incomeSharePercent(totalVariable, income);
+    const actualInvestPct = incomeSharePercent(investments?.monthlyContribution ?? 0, income);
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
+      { name: "Fixed", actual: actualFixedPct, planned: incomeSharePercent(plannedMonthlyAmount(reallocation, "fixedExpenses"), income) },
+      { name: "Variable", actual: actualVariablePct, planned: incomeSharePercent(plannedMonthlyAmount(reallocation, "variableExpenses"), income) },
+      { name: "Investments", actual: actualInvestPct, planned: incomeSharePercent(plannedMonthlyAmount(reallocation, "investments"), income) },
+    ].map(d => ({
+      ...d,
+      actual: Math.round(d.actual),
+      planned: Math.round(d.planned),
+      drift: Math.round(Math.abs(d.actual - d.planned)),
+    }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);

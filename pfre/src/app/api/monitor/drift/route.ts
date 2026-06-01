@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { allocationDriftPercent, plannedMonthlyAmount } from "@/lib/engine/monitoring";
 
 export async function GET() {
   const state = await readServerState();
@@ -37,14 +38,14 @@ export async function GET() {
   const actualInvestment = investments?.monthlyContribution ?? 0;
 
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const plannedFixed = reallocation ? Math.round(income * (reallocation.fixedExpenses ?? 0) / 100) : 0;
-  const plannedVariable = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 0) / 100) : 0;
-  const plannedInvestment = reallocation ? Math.round(income * (reallocation.investments ?? 0) / 100) : 0;
+  const plannedFixed = Math.round(plannedMonthlyAmount(reallocation, "fixedExpenses"));
+  const plannedVariable = Math.round(plannedMonthlyAmount(reallocation, "variableExpenses"));
+  const plannedInvestment = Math.round(plannedMonthlyAmount(reallocation, "investments"));
 
   const categories = [
-    { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: plannedFixed > 0 ? Math.round(Math.abs(actualFixed - plannedFixed) / plannedFixed * 100) : 0 },
-    { name: "Variable Expenses", actual: actualVariable, planned: plannedVariable, driftPct: plannedVariable > 0 ? Math.round(Math.abs(actualVariable - plannedVariable) / plannedVariable * 100) : 0 },
-    { name: "Investments", actual: actualInvestment, planned: plannedInvestment, driftPct: plannedInvestment > 0 ? Math.round(Math.abs(actualInvestment - plannedInvestment) / plannedInvestment * 100) : 0 },
+    { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: Math.round(allocationDriftPercent(actualFixed, plannedFixed, income)) },
+    { name: "Variable Expenses", actual: actualVariable, planned: plannedVariable, driftPct: Math.round(allocationDriftPercent(actualVariable, plannedVariable, income)) },
+    { name: "Investments", actual: actualInvestment, planned: plannedInvestment, driftPct: Math.round(allocationDriftPercent(actualInvestment, plannedInvestment, income)) },
   ];
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
