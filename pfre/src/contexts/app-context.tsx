@@ -13,6 +13,7 @@ import type {
   ChatMessage,
 } from "@/lib/types";
 import { type AppState, loadState, saveState } from "@/lib/store";
+import { sanitizeServerState } from "@/lib/state-sync";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -143,7 +144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable = sanitizeServerState(state);
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

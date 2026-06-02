@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { sanitizeServerState } from "@/lib/state-sync";
 
 const STATE_FILE = path.join(process.cwd(), ".pfre-state.json");
 
@@ -19,5 +20,5 @@ export async function readServerState(): Promise<Record<string, unknown> | null>
 }
 
 export async function writeServerState(state: Record<string, unknown>): Promise<void> {
-  await fs.writeFile(STATE_FILE, JSON.stringify(state), "utf-8");
+  await fs.writeFile(STATE_FILE, JSON.stringify(sanitizeServerState(state)), "utf-8");
 }
