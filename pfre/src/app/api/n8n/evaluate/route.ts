@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { calculateBudgetDrift, calculateSpendingUsage } from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -56,11 +57,9 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
-    const fired = percentUsed >= threshold;
+    const { variableCap, percentUsed, alert: fired } = calculateSpendingUsage(totalVariable, reallocation, threshold);
     alerts.push({
       check: "spending",
       alert: fired,
@@ -112,17 +111,11 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
-
-    const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
-
-    const maxDrift = Math.max(...drifts.map(d => d.drift));
+    const { categories, overallDrift: maxDrift } = calculateBudgetDrift(income, {
+      fixedExpenses: totalFixed,
+      variableExpenses: totalVariable,
+      investments: investments?.monthlyContribution ?? 0,
+    }, reallocation);
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
     const threshold = (driftRule?.threshold as number) ?? 10;
     const fired = maxDrift > threshold;
@@ -134,7 +127,7 @@ export async function GET(req: Request) {
       message: fired
         ? `Max drift at ${maxDrift}% (threshold: ${threshold}%).`
         : `Drift within bounds at ${maxDrift}%.`,
-      data: { categories: drifts, maxDrift, threshold },
+      data: { categories, maxDrift, threshold },
     });
   }
 

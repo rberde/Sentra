@@ -109,8 +109,12 @@ export function DashboardLayout() {
 
       const updatedProfile = { ...state.profile };
       if (typeof autofill.cashBuffer === "number") updatedProfile.cashBuffer = autofill.cashBuffer;
-      if (autofill.fixedExpenses?.length) updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
-      if (autofill.variableExpenses?.length) updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
+      if (updatedProfile.fixedExpenses.length === 0 && autofill.fixedExpenses?.length) {
+        updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
+      }
+      if (updatedProfile.variableExpenses.length === 0 && autofill.variableExpenses?.length) {
+        updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
+      }
       const holdingsTotal = (autofill.investmentHoldings ?? []).reduce(
         (s: number, h: { value: number }) => s + h.value, 0
       );
