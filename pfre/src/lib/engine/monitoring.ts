@@ -48,7 +48,7 @@ export function calculateBudgetDrift(
   actuals: ActualBudgetAmounts,
   reallocation: BudgetReallocation,
 ): { categories: DriftCategory[]; overallDrift: number } {
-  const categories: DriftCategory[] = [
+  const baseCategories: Array<Omit<DriftCategory, "driftPct">> = [
     {
       key: "fixedExpenses",
       name: "Fixed Expenses",
@@ -56,7 +56,6 @@ export function calculateBudgetDrift(
       planned: Math.round(reallocation.fixedExpenses ?? 0),
       actualPct: roundedPercentage(actuals.fixedExpenses, income),
       plannedPct: roundedPercentage(reallocation.fixedExpenses ?? 0, income),
-      driftPct: 0,
     },
     {
       key: "variableExpenses",
@@ -65,7 +64,6 @@ export function calculateBudgetDrift(
       planned: Math.round(reallocation.variableExpenses ?? 0),
       actualPct: roundedPercentage(actuals.variableExpenses, income),
       plannedPct: roundedPercentage(reallocation.variableExpenses ?? 0, income),
-      driftPct: 0,
     },
     {
       key: "investments",
@@ -74,9 +72,9 @@ export function calculateBudgetDrift(
       planned: Math.round(reallocation.investments ?? 0),
       actualPct: roundedPercentage(actuals.investments, income),
       plannedPct: roundedPercentage(reallocation.investments ?? 0, income),
-      driftPct: 0,
     },
-  ].map(category => ({
+  ];
+  const categories = baseCategories.map(category => ({
     ...category,
     driftPct: Math.abs(category.actualPct - category.plannedPct),
   }));
