@@ -18,6 +18,13 @@ export async function readServerState(): Promise<Record<string, unknown> | null>
   }
 }
 
+export function sanitizeServerState(state: Record<string, unknown>): Record<string, unknown> {
+  const safeState = { ...state };
+  delete safeState.plaidAccessToken;
+  delete safeState.chatHistory;
+  return safeState;
+}
+
 export async function writeServerState(state: Record<string, unknown>): Promise<void> {
-  await fs.writeFile(STATE_FILE, JSON.stringify(state), "utf-8");
+  await fs.writeFile(STATE_FILE, JSON.stringify(sanitizeServerState(state)), "utf-8");
 }

@@ -4,6 +4,9 @@ import { writeServerState, readServerState } from "@/lib/server-state";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid state payload" }, { status: 400 });
+    }
     await writeServerState(body);
     return NextResponse.json({ status: "ok", syncedAt: new Date().toISOString() });
   } catch (error) {
