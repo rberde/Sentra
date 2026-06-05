@@ -73,7 +73,7 @@ function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notificatio
 
   if (actualSpending <= cap) return null;
 
-  const overBy = Math.round(((actualSpending - planBudget) / planBudget) * 100);
+  const overBy = Math.round(((actualSpending - cap) / cap) * 100);
   return {
     id: crypto.randomUUID(),
     type: "spending_limit",
