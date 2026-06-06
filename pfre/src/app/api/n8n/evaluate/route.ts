@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireMonitorApiKey } from "@/lib/api-auth";
 import { readServerState } from "@/lib/server-state";
 
 /**
@@ -11,6 +12,9 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
+  const unauthorized = requireMonitorApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const state = await readServerState();
 
   if (!state || !state.profile) {
@@ -56,11 +60,12 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
-    const fired = percentUsed >= threshold;
+    const variableBudget = reallocation.variableExpenses ?? 0;
+    const variableCap = resolveSpendingCap(variableBudget, spendingRule);
+    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    const fired = variableCap > 0 && totalVariable > variableCap;
     alerts.push({
       check: "spending",
       alert: fired,
@@ -117,9 +122,9 @@ export async function GET(req: Request) {
     const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
+      { name: "Fixed", actual: actualFixedPct, planned: income > 0 ? Math.round(((reallocation.fixedExpenses ?? 0) / income) * 100) : 0 },
+      { name: "Variable", actual: actualVariablePct, planned: income > 0 ? Math.round(((reallocation.variableExpenses ?? 0) / income) * 100) : 0 },
+      { name: "Investments", actual: actualInvestPct, planned: income > 0 ? Math.round(((reallocation.investments ?? 0) / income) * 100) : 0 },
     ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
@@ -200,4 +205,10 @@ export async function GET(req: Request) {
       ? `${firedAlerts.length} alert(s) fired: ${firedAlerts.map(a => a.check).join(", ")}.`
       : "All checks passed. No alerts.",
   });
+}
+
+function resolveSpendingCap(planBudget: number, rule: Record<string, unknown> | undefined): number {
+  const threshold = (rule?.threshold as number | undefined) ?? 100;
+  if (rule?.aiGenerated && threshold > 100) return threshold;
+  return planBudget * (threshold / 100);
 }

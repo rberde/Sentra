@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireMonitorApiKey } from "@/lib/api-auth";
 import { readServerState } from "@/lib/server-state";
 
-export async function POST() {
+export async function POST(req: Request) {
+  const unauthorized = requireMonitorApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const state = await readServerState();
 
   if (!state) {
