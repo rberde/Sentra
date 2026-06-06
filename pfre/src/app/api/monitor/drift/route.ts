@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireMonitorApiKey } from "@/lib/api-auth";
 import { readServerState } from "@/lib/server-state";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const unauthorized = requireMonitorApiKey(req);
+  if (unauthorized) return unauthorized;
+
   const state = await readServerState();
 
   if (!state) {
@@ -37,9 +41,9 @@ export async function GET() {
   const actualInvestment = investments?.monthlyContribution ?? 0;
 
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const plannedFixed = reallocation ? Math.round(income * (reallocation.fixedExpenses ?? 0) / 100) : 0;
-  const plannedVariable = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 0) / 100) : 0;
-  const plannedInvestment = reallocation ? Math.round(income * (reallocation.investments ?? 0) / 100) : 0;
+  const plannedFixed = reallocation?.fixedExpenses ?? 0;
+  const plannedVariable = reallocation?.variableExpenses ?? 0;
+  const plannedInvestment = reallocation?.investments ?? 0;
 
   const categories = [
     { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: plannedFixed > 0 ? Math.round(Math.abs(actualFixed - plannedFixed) / plannedFixed * 100) : 0 },

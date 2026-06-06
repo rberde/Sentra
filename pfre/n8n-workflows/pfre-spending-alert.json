@@ -16,7 +16,14 @@
     {
       "parameters": {
         "url": "={{$env.PFRE_BASE_URL || 'http://localhost:3000'}}/api/monitor/spending",
-        "options": { "timeout": 10000 }
+        "options": { "timeout": 10000 },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Accept", "value": "application/json" },
+            { "name": "x-pfre-monitor-key", "value": "={{$env.PFRE_MONITOR_API_KEY}}" }
+          ]
+        }
       },
       "id": "http-spending",
       "name": "Check Spending",
