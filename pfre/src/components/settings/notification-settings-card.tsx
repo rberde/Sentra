@@ -256,7 +256,11 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
-    checkSync();
+    const timeout = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [checkSync]);
 
   const testEvaluate = async () => {
