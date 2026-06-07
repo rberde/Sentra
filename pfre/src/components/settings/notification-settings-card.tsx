@@ -230,6 +230,7 @@ export function NotificationSettingsCard() {
 /* ─── n8n Integration Section ─── */
 
 function N8nConnectionCard() {
+  const { state } = useApp();
   const [status, setStatus] = useState<"idle" | "checking" | "connected" | "disconnected">("idle");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
@@ -275,9 +276,28 @@ function N8nConnectionCard() {
     setTesting(false);
   };
 
-  const saveSyncToken = () => {
+  const syncCurrentState = async () => {
+    const { chatHistory, ...syncable } = state;
+    void chatHistory;
+
+    const res = await fetch("/api/state/sync", {
+      method: "POST",
+      headers: stateSyncHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
+    });
+
+    return res.ok;
+  };
+
+  const saveSyncToken = async () => {
     setStoredStateSyncToken(syncToken);
-    checkSync();
+    setStatus("checking");
+
+    if (await syncCurrentState()) {
+      await checkSync();
+    } else {
+      setStatus("disconnected");
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
