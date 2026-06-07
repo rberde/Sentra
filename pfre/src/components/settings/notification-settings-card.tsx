@@ -423,9 +423,11 @@ function N8nConnectionCard() {
         </div>
 
         {evaluateResult && (
-          <pre className="text-[10px] bg-slate-900 text-green-400 rounded-lg p-3 overflow-auto max-h-48 font-mono">
-            {JSON.stringify(evaluateResult, null, 2)}
-          </pre>
+          <div className="relative w-full min-w-0">
+            <pre className="block w-full text-[10px] bg-slate-900 text-green-400 rounded-lg p-3 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-words">
+              {JSON.stringify(evaluateResult, null, 2)}
+            </pre>
+          </div>
         )}
 
         {/* n8n Workflow Downloads */}
