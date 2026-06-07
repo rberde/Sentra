@@ -3,8 +3,8 @@ import { afterEach, describe, it } from "node:test";
 
 import {
   isAuthorizedServerStateRequest,
+  STATE_SYNC_TOKEN_HEADER,
 } from "./server-state-auth.ts";
-import { STATE_SYNC_TOKEN_HEADER } from "./state-sync-token.ts";
 
 const ORIGINAL_TOKEN = process.env.PFRE_STATE_SYNC_TOKEN;
 

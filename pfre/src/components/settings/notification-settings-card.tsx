@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
-import { getStoredStateSyncToken, setStoredStateSyncToken, stateSyncHeaders } from "@/lib/state-sync-token";
+import { setStoredStateSyncToken, stateSyncHeaders } from "@/lib/state-sync-token";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -253,10 +253,6 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
-  }, []);
-
-  useEffect(() => {
-    setSyncToken(getStoredStateSyncToken());
   }, []);
 
   useEffect(() => {

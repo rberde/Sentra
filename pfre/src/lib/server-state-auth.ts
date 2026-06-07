@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "crypto";
-import { STATE_SYNC_TOKEN_HEADER } from "./state-sync-token";
+
+export const STATE_SYNC_TOKEN_HEADER = "x-pfre-state-token";
 
 function configuredStateToken(): string | null {
   const token = process.env.PFRE_STATE_SYNC_TOKEN?.trim();
