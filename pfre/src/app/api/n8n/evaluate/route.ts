@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedServerStateRequest } from "@/lib/server-state-auth";
 import { readServerState } from "@/lib/server-state";
 
 /**
@@ -11,6 +12,10 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
+  if (!isAuthorizedServerStateRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const state = await readServerState();
 
   if (!state || !state.profile) {

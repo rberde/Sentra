@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedServerStateRequest } from "@/lib/server-state-auth";
 import { readServerState } from "@/lib/server-state";
 
-export async function POST() {
+export async function POST(req: Request) {
+  if (!isAuthorizedServerStateRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const state = await readServerState();
 
   if (!state) {

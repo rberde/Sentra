@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedServerStateRequest } from "@/lib/server-state-auth";
 import { writeServerState, readServerState } from "@/lib/server-state";
 
 export async function POST(req: Request) {
+  if (!isAuthorizedServerStateRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     await writeServerState(body);
@@ -12,7 +17,11 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  if (!isAuthorizedServerStateRequest(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const state = await readServerState();
   if (!state) {
     return NextResponse.json({ error: "No state synced yet" }, { status: 404 });

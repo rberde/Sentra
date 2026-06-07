@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { setStoredStateSyncToken, stateSyncHeaders } from "@/lib/state-sync-token";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -229,18 +230,20 @@ export function NotificationSettingsCard() {
 /* ─── n8n Integration Section ─── */
 
 function N8nConnectionCard() {
+  const { state } = useApp();
   const [status, setStatus] = useState<"idle" | "checking" | "connected" | "disconnected">("idle");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [syncToken, setSyncToken] = useState("");
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   const checkSync = useCallback(async () => {
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", { headers: stateSyncHeaders() });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -254,19 +257,47 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
-    checkSync();
+    const timeout = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [checkSync]);
 
   const testEvaluate = async () => {
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", { headers: stateSyncHeaders() });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
       setEvaluateResult({ error: "Failed to reach evaluate endpoint" });
     }
     setTesting(false);
+  };
+
+  const syncCurrentState = async () => {
+    const { chatHistory, ...syncable } = state;
+    void chatHistory;
+
+    const res = await fetch("/api/state/sync", {
+      method: "POST",
+      headers: stateSyncHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
+    });
+
+    return res.ok;
+  };
+
+  const saveSyncToken = async () => {
+    setStoredStateSyncToken(syncToken);
+    setStatus("checking");
+
+    if (await syncCurrentState()) {
+      await checkSync();
+    } else {
+      setStatus("disconnected");
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -327,6 +358,25 @@ function N8nConnectionCard() {
           </Button>
         </div>
 
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">State Sync Token</Label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={syncToken}
+              onChange={e => setSyncToken(e.target.value)}
+              placeholder="Matches PFRE_STATE_SYNC_TOKEN"
+              className="h-8 text-xs"
+            />
+            <Button size="sm" variant="outline" onClick={saveSyncToken}>
+              Save
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Required to sync local state and let n8n poll protected monitoring endpoints.
+          </p>
+        </div>
+
         {/* API Endpoints */}
         <div>
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">API Endpoints for n8n</p>
@@ -373,9 +423,11 @@ function N8nConnectionCard() {
         </div>
 
         {evaluateResult && (
-          <pre className="text-[10px] bg-slate-900 text-green-400 rounded-lg p-3 overflow-auto max-h-48 font-mono">
-            {JSON.stringify(evaluateResult, null, 2)}
-          </pre>
+          <div className="relative w-full min-w-0">
+            <pre className="block w-full text-[10px] bg-slate-900 text-green-400 rounded-lg p-3 overflow-auto max-h-48 font-mono whitespace-pre-wrap break-words">
+              {JSON.stringify(evaluateResult, null, 2)}
+            </pre>
+          </div>
         )}
 
         {/* n8n Workflow Downloads */}
@@ -424,10 +476,12 @@ function N8nConnectionCard() {
             </div>
             <div>
               <p className="font-medium text-slate-700">3. Set Environment Variable</p>
-              <p>In n8n Settings → Variables, create:</p>
+              <p>Set the same token in your app environment and in n8n Settings → Variables:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
-                PFRE_BASE_URL = {baseUrl}
+                PFRE_BASE_URL = {baseUrl}<br />
+                PFRE_STATE_SYNC_TOKEN = your-long-random-token
               </code>
+              <p className="mt-1">Enter that token above so browser state sync can authenticate.</p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>
