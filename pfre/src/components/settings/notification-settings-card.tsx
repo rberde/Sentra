@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { getStoredStateSyncToken, setStoredStateSyncToken, stateSyncHeaders } from "@/lib/state-sync-token";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -234,13 +235,14 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [syncToken, setSyncToken] = useState("");
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   const checkSync = useCallback(async () => {
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", { headers: stateSyncHeaders() });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -254,19 +256,28 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
+    setSyncToken(getStoredStateSyncToken());
+  }, []);
+
+  useEffect(() => {
     checkSync();
   }, [checkSync]);
 
   const testEvaluate = async () => {
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", { headers: stateSyncHeaders() });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
       setEvaluateResult({ error: "Failed to reach evaluate endpoint" });
     }
     setTesting(false);
+  };
+
+  const saveSyncToken = () => {
+    setStoredStateSyncToken(syncToken);
+    checkSync();
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -325,6 +336,25 @@ function N8nConnectionCard() {
           <Button size="sm" variant="ghost" onClick={checkSync} disabled={status === "checking"}>
             <RefreshCw className={`w-3 h-3 ${status === "checking" ? "animate-spin" : ""}`} />
           </Button>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">State Sync Token</Label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={syncToken}
+              onChange={e => setSyncToken(e.target.value)}
+              placeholder="Matches PFRE_STATE_SYNC_TOKEN"
+              className="h-8 text-xs"
+            />
+            <Button size="sm" variant="outline" onClick={saveSyncToken}>
+              Save
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Required to sync local state and let n8n poll protected monitoring endpoints.
+          </p>
         </div>
 
         {/* API Endpoints */}
@@ -424,10 +454,12 @@ function N8nConnectionCard() {
             </div>
             <div>
               <p className="font-medium text-slate-700">3. Set Environment Variable</p>
-              <p>In n8n Settings → Variables, create:</p>
+              <p>Set the same token in your app environment and in n8n Settings → Variables:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
-                PFRE_BASE_URL = {baseUrl}
+                PFRE_BASE_URL = {baseUrl}<br />
+                PFRE_STATE_SYNC_TOKEN = your-long-random-token
               </code>
+              <p className="mt-1">Enter that token above so browser state sync can authenticate.</p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>
