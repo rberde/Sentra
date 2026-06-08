@@ -51,8 +51,16 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, stressResult: action.result };
     case "SET_REBALANCING_PLANS":
       return { ...state, rebalancingPlans: action.plans };
-    case "SELECT_PLAN":
-      return { ...state, selectedPlanId: action.planId };
+    case "SELECT_PLAN": {
+      const activatedAt = new Date().toISOString();
+      return {
+        ...state,
+        selectedPlanId: action.planId,
+        rebalancingPlans: state.rebalancingPlans.map(plan =>
+          plan.id === action.planId ? { ...plan, activatedAt } : plan
+        ),
+      };
+    }
     case "ADD_NOTIFICATION":
       return { ...state, notifications: [action.notification, ...state.notifications] };
     case "DISMISS_NOTIFICATION":
@@ -143,7 +151,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

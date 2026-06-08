@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { evaluateSpendingBudget } from "@/lib/monitoring";
 
 export async function GET() {
   const state = await readServerState();
@@ -34,15 +35,11 @@ export async function GET() {
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const actualSpending = variableExpenses.reduce((s, e) => s + e.amount, 0);
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const income = (profile.monthlyIncome as number) ?? 0;
-  const variableCap = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 20) / 100) : 0;
-  const percentUsed = variableCap > 0 ? Math.round((actualSpending / variableCap) * 100) : 0;
   const daysRemaining = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate();
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
   const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
-  const threshold = (spendingRule?.threshold as number) ?? 100;
-  const alert = percentUsed >= threshold;
+  const spending = evaluateSpendingBudget(actualSpending, reallocation?.variableExpenses ?? 0, spendingRule?.threshold);
 
   return NextResponse.json({
     status: "ok",
@@ -50,16 +47,16 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     data: {
       planActive: true,
-      variableSpendingCap: variableCap,
-      actualSpendingThisMonth: actualSpending,
-      percentUsed,
-      thresholdPercent: threshold,
+      variableSpendingCap: spending.planBudget,
+      actualSpendingThisMonth: spending.actualSpending,
+      percentUsed: spending.percentUsed,
+      thresholdPercent: spending.thresholdPct,
       daysRemainingInMonth: daysRemaining,
-      alert,
-      alertLevel: alert ? (percentUsed >= 120 ? "critical" : "warning") : null,
-      message: alert
-        ? `Variable spending at ${percentUsed}% of plan cap ($${actualSpending} / $${variableCap}).`
-        : `Variable spending within budget at ${percentUsed}%.`,
+      alert: spending.alert,
+      alertLevel: spending.alert ? (spending.percentUsed >= 120 ? "critical" : "warning") : null,
+      message: spending.alert
+        ? `Variable spending at ${spending.percentUsed}% of plan cap ($${spending.actualSpending} / $${spending.planBudget}).`
+        : `Variable spending within budget at ${spending.percentUsed}%.`,
     },
   });
 }

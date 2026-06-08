@@ -78,6 +78,11 @@ export function loadState(): AppState {
     if (parsed.notificationSettings && parsed.notificationSettings.rules === undefined) {
       parsed.notificationSettings.rules = defaultState().notificationSettings.rules;
     }
+    if (Array.isArray(parsed.notificationSettings?.rules)) {
+      parsed.notificationSettings.rules = parsed.notificationSettings.rules.map((rule: { type?: string; aiGenerated?: boolean; threshold?: number }) =>
+        rule.type === "spending_cap" && rule.aiGenerated ? { ...rule, threshold: 100 } : rule
+      );
+    }
     return parsed as AppState;
   } catch {
     return defaultState();

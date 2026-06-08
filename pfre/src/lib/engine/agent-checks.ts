@@ -1,5 +1,6 @@
 import type { AppState } from "@/lib/store";
 import type { Notification, NotificationRule } from "@/lib/types";
+import { evaluateSpendingBudget } from "@/lib/monitoring";
 
 /**
  * Evaluates all enabled notification rules against the current app state.
@@ -67,19 +68,17 @@ function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notificatio
   const planBudget = ctx.activePlan.monthlyReallocation.variableExpenses;
   if (planBudget <= 0) return null;
 
-  const actualSpending = ctx.totalVariable;
-  const thresholdPct = rule.threshold ?? 100;
-  const cap = planBudget * (thresholdPct / 100);
+  const evaluation = evaluateSpendingBudget(ctx.totalVariable, planBudget, rule.threshold);
+  const cap = evaluation.planBudget * (evaluation.thresholdPct / 100);
 
-  if (actualSpending <= cap) return null;
+  if (!evaluation.alert) return null;
 
-  const overBy = Math.round(((actualSpending - planBudget) / planBudget) * 100);
   return {
     id: crypto.randomUUID(),
     type: "spending_limit",
     title: "Spending Alert",
-    message: `Your variable spending ($${actualSpending.toLocaleString()}/mo) is ${overBy}% over your plan budget of $${planBudget.toLocaleString()}/mo. Consider reviewing your spending or adjusting your plan.`,
-    severity: overBy > 50 ? "urgent" : "warning",
+    message: `Your variable spending ($${evaluation.actualSpending.toLocaleString()}/mo) is ${evaluation.percentUsed}% of your plan budget, above the alert cap of $${Math.round(cap).toLocaleString()}/mo. Consider reviewing your spending or adjusting your plan.`,
+    severity: evaluation.percentUsed >= 150 ? "urgent" : "warning",
     isDismissed: false,
     createdAt: new Date().toISOString(),
   };

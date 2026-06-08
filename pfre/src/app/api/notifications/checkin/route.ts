@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { daysSinceTimestamp, getPlanActivationTimestamp } from "@/lib/monitoring";
 
 export async function POST() {
   const state = await readServerState();
@@ -30,10 +31,9 @@ export async function POST() {
   const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
   const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
 
-  // Use plan activation time or last sync as reference
-  const planCreated = (activePlan.createdAt as string) ?? (state.lastSyncedAt as string) ?? new Date().toISOString();
-  const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
-  const nextCheckinDue = daysSince >= intervalDays;
+  const activationTimestamp = getPlanActivationTimestamp(activePlan, state);
+  const daysSince = daysSinceTimestamp(activationTimestamp);
+  const nextCheckinDue = activationTimestamp !== null && daysSince >= intervalDays;
 
   const profile = state.profile as Record<string, unknown> | null;
   const income = (profile?.monthlyIncome as number) ?? 0;
@@ -48,6 +48,7 @@ export async function POST() {
     data: {
       planActive: true,
       planName: activePlan.name ?? "Active Plan",
+      activationTimestamp,
       daysSincePlanActivation: daysSince,
       intervalDays,
       nextCheckinDue,
