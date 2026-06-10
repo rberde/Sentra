@@ -1,5 +1,6 @@
 import type { AppState } from "@/lib/store";
 import type { Notification, NotificationRule } from "@/lib/types";
+import { evaluateAllocationDrift, evaluateSpending } from "./monitoring";
 
 /**
  * Evaluates all enabled notification rules against the current app state.
@@ -64,21 +65,23 @@ function evaluateRule(rule: NotificationRule, ctx: EvalContext): Notification | 
 
 function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notification | null {
   if (!ctx.activePlan) return null;
-  const planBudget = ctx.activePlan.monthlyReallocation.variableExpenses;
-  if (planBudget <= 0) return null;
+  const spending = evaluateSpending(
+    ctx.totalVariable,
+    ctx.activePlan.monthlyReallocation.variableExpenses,
+    rule,
+  );
+  if (spending.variableCap <= 0) return null;
 
   const actualSpending = ctx.totalVariable;
-  const thresholdPct = rule.threshold ?? 100;
-  const cap = planBudget * (thresholdPct / 100);
 
-  if (actualSpending <= cap) return null;
+  if (!spending.alert) return null;
 
-  const overBy = Math.round(((actualSpending - planBudget) / planBudget) * 100);
+  const overBy = Math.round(((actualSpending - spending.variableCap) / spending.variableCap) * 100);
   return {
     id: crypto.randomUUID(),
     type: "spending_limit",
     title: "Spending Alert",
-    message: `Your variable spending ($${actualSpending.toLocaleString()}/mo) is ${overBy}% over your plan budget of $${planBudget.toLocaleString()}/mo. Consider reviewing your spending or adjusting your plan.`,
+    message: `Your variable spending ($${actualSpending.toLocaleString()}/mo) is ${overBy}% over your plan budget of $${spending.variableCap.toLocaleString()}/mo. Consider reviewing your spending or adjusting your plan.`,
     severity: overBy > 50 ? "urgent" : "warning",
     isDismissed: false,
     createdAt: new Date().toISOString(),
@@ -125,29 +128,23 @@ function checkDrift(rule: NotificationRule, ctx: EvalContext): Notification | nu
   if (!ctx.activePlan) return null;
   const thresholdPct = rule.threshold ?? 10;
   const plan = ctx.activePlan.monthlyReallocation;
-  const income = ctx.profile.monthlyIncome;
-  if (income <= 0) return null;
+  const drift = evaluateAllocationDrift(
+    {
+      fixedExpenses: ctx.totalFixed,
+      variableExpenses: ctx.totalVariable,
+      investments: ctx.profile.investments.monthlyContribution,
+    },
+    {
+      fixedExpenses: plan.fixedExpenses,
+      variableExpenses: plan.variableExpenses,
+      investments: plan.investments,
+    },
+    thresholdPct,
+  );
 
-  const actualPcts = {
-    fixedExpenses: (ctx.totalFixed / income) * 100,
-    variableExpenses: (ctx.totalVariable / income) * 100,
-    investments: (ctx.profile.investments.monthlyContribution / income) * 100,
-  };
-
-  const planPcts = {
-    fixedExpenses: (plan.fixedExpenses / income) * 100,
-    variableExpenses: (plan.variableExpenses / income) * 100,
-    investments: (plan.investments / income) * 100,
-  };
-
-  const drifts: string[] = [];
-  for (const [key, actual] of Object.entries(actualPcts)) {
-    const planned = planPcts[key as keyof typeof planPcts];
-    const drift = Math.abs(actual - planned);
-    if (drift > thresholdPct) {
-      drifts.push(`${key.replace(/([A-Z])/g, " $1").trim()} drifted ${Math.round(drift)}%`);
-    }
-  }
+  const drifts = drift.categories
+    .filter(category => category.driftPct > thresholdPct)
+    .map(category => `${category.key.replace(/([A-Z])/g, " $1").trim()} drifted ${category.driftPct}%`);
 
   if (drifts.length === 0) return null;
 
