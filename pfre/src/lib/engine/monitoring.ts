@@ -87,29 +87,28 @@ export function evaluateAllocationDrift(
   planned: AllocationAmounts,
   threshold = 10,
 ): DriftEvaluation {
-  const categories: DriftCategory[] = [
+  const baseCategories: Array<Omit<DriftCategory, "driftPct">> = [
     {
       key: "fixedExpenses",
       name: "Fixed Expenses",
       actual: Math.round(finiteNumber(actual.fixedExpenses)),
       planned: Math.round(finiteNumber(planned.fixedExpenses)),
-      driftPct: 0,
     },
     {
       key: "variableExpenses",
       name: "Variable Expenses",
       actual: Math.round(finiteNumber(actual.variableExpenses)),
       planned: Math.round(finiteNumber(planned.variableExpenses)),
-      driftPct: 0,
     },
     {
       key: "investments",
       name: "Investments",
       actual: Math.round(finiteNumber(actual.investments)),
       planned: Math.round(finiteNumber(planned.investments)),
-      driftPct: 0,
     },
-  ].map(category => ({
+  ];
+
+  const categories: DriftCategory[] = baseCategories.map(category => ({
     ...category,
     driftPct: driftPercent(category.actual, category.planned),
   }));
