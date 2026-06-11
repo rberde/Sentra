@@ -61,7 +61,7 @@ test("sanitizes sensitive client-only state before persistence", async () => {
 
   assert.equal(persisted?.plaidAccessToken, undefined);
   assert.equal(persisted?.chatHistory, undefined);
-  assert.equal((persisted?.profile as { name?: string }).name, "Avery");
+  assert.equal(persisted?.profile?.name, "Avery");
 });
 
 test("rejects malformed array fields that would crash monitor readers", () => {
@@ -89,6 +89,6 @@ test("partitions synced state by token", async () => {
   await writeServerState(firstToken, { profile: { name: "First", fixedExpenses: [], variableExpenses: [] } });
   await writeServerState(secondToken, { profile: { name: "Second", fixedExpenses: [], variableExpenses: [] } });
 
-  assert.equal(((await readServerState(firstToken))?.profile as { name?: string }).name, "First");
-  assert.equal(((await readServerState(secondToken))?.profile as { name?: string }).name, "Second");
+  assert.equal((await readServerState(firstToken))?.profile?.name, "First");
+  assert.equal((await readServerState(secondToken))?.profile?.name, "Second");
 });
