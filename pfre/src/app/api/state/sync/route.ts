@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
-import { writeServerState, readServerState } from "@/lib/server-state";
+import { getStateSyncToken, sanitizeServerState, writeServerState, readServerState } from "@/lib/server-state";
 
 export async function POST(req: Request) {
   try {
+    const token = getStateSyncToken(req);
+    if (!token) {
+      return NextResponse.json({ error: "Missing or invalid state sync token" }, { status: 401 });
+    }
+
     const body = await req.json();
-    await writeServerState(body);
+    const sanitized = sanitizeServerState(body);
+    if (!sanitized) {
+      return NextResponse.json({ error: "Invalid state sync payload" }, { status: 400 });
+    }
+
+    await writeServerState(token, sanitized);
     return NextResponse.json({ status: "ok", syncedAt: new Date().toISOString() });
   } catch (error) {
     console.error("State sync error:", error);
@@ -12,8 +22,13 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
-  const state = await readServerState();
+export async function GET(req: Request) {
+  const token = getStateSyncToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing or invalid state sync token" }, { status: 401 });
+  }
+
+  const state = await readServerState(token);
   if (!state) {
     return NextResponse.json({ error: "No state synced yet" }, { status: 404 });
   }

@@ -14,6 +14,7 @@ import { RiskEventPanel } from "@/components/risk/risk-event-panel";
 import { RebalancingPanel } from "@/components/rebalancing/rebalancing-panel";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { ChatSidebar } from "@/components/chat/chat-sidebar";
+import { stateSyncAuthHeaders } from "@/lib/state-sync-token";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,7 @@ export function DashboardLayout() {
     // Push to n8n webhook (non-blocking)
     fetch("/api/n8n/trigger", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...stateSyncAuthHeaders() },
       body: JSON.stringify({
         totalAlerts: notifications.length,
         alerts: notifications.map(n => ({
@@ -131,7 +132,7 @@ export function DashboardLayout() {
           // Push alerts to n8n webhook (non-blocking)
           fetch("/api/n8n/trigger", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...stateSyncAuthHeaders() },
             body: JSON.stringify({
               totalAlerts: notifications.length,
               alerts: notifications.map(n => ({
