@@ -256,8 +256,9 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
-    setSyncToken(getStateSyncToken());
+    const tokenTimer = window.setTimeout(() => setSyncToken(getStateSyncToken()), 0);
     checkSync();
+    return () => window.clearTimeout(tokenTimer);
   }, [checkSync]);
 
   const testEvaluate = async () => {
