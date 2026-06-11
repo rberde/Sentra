@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { getStateSyncToken, stateSyncAuthHeaders } from "@/lib/state-sync-token";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -234,13 +235,14 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [syncToken, setSyncToken] = useState("");
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   const checkSync = useCallback(async () => {
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", { headers: stateSyncAuthHeaders() });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -254,13 +256,20 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
-    checkSync();
+    const tokenTimer = window.setTimeout(() => setSyncToken(getStateSyncToken()), 0);
+    const syncTimer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+    return () => {
+      window.clearTimeout(tokenTimer);
+      window.clearTimeout(syncTimer);
+    };
   }, [checkSync]);
 
   const testEvaluate = async () => {
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", { headers: stateSyncAuthHeaders() });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -325,6 +334,29 @@ function N8nConnectionCard() {
           <Button size="sm" variant="ghost" onClick={checkSync} disabled={status === "checking"}>
             <RefreshCw className={`w-3 h-3 ${status === "checking" ? "animate-spin" : ""}`} />
           </Button>
+        </div>
+
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-amber-900">n8n Bearer Token</p>
+              <p className="text-[11px] text-amber-800">
+                Add this as PFRE_SYNC_TOKEN in n8n. It scopes monitoring access to this browser&apos;s synced state.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => copyToClipboard(syncToken, "sync-token")}
+              disabled={!syncToken}
+            >
+              {copied === "sync-token" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+            </Button>
+          </div>
+          <code className="block bg-white/80 rounded px-2 py-1 text-[10px] break-all">
+            {syncToken || "Generating token..."}
+          </code>
         </div>
 
         {/* API Endpoints */}
@@ -423,11 +455,15 @@ function N8nConnectionCard() {
               <p>Download one of the workflow JSON files above, then in n8n go to <strong>Workflows → Import from File</strong>.</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700">3. Set Environment Variable</p>
+              <p className="font-medium text-slate-700">3. Set Environment Variables</p>
               <p>In n8n Settings → Variables, create:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
                 PFRE_BASE_URL = {baseUrl}
               </code>
+              <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px] break-all">
+                PFRE_SYNC_TOKEN = {syncToken || "<copy from token panel above>"}
+              </code>
+              <p className="mt-1">Imported workflows send this token as a bearer credential when polling Sentra.</p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>
