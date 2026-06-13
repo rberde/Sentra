@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { calculateAllocationDrift, calculateSpendingUsage } from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -56,20 +57,26 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
-    const threshold = (spendingRule?.threshold as number) ?? 100;
-    const fired = percentUsed >= threshold;
+    const spending = calculateSpendingUsage({
+      actualSpending: totalVariable,
+      reallocation,
+      threshold: (spendingRule?.threshold as number) ?? 100,
+    });
     alerts.push({
       check: "spending",
-      alert: fired,
-      severity: fired ? (percentUsed >= 120 ? "critical" : "warning") : "info",
+      alert: spending.alert,
+      severity: spending.alert ? (spending.percentUsed >= 120 ? "critical" : "warning") : "info",
       title: "Spending Monitor",
-      message: fired
-        ? `Variable spending at ${percentUsed}% of plan cap ($${totalVariable} / $${variableCap}).`
-        : `Spending within budget at ${percentUsed}%.`,
-      data: { variableCap, actualSpending: totalVariable, percentUsed, threshold },
+      message: spending.alert
+        ? `Variable spending at ${spending.percentUsed}% of plan cap ($${spending.actualSpending} / $${spending.variableCap}).`
+        : `Spending within budget at ${spending.percentUsed}%.`,
+      data: {
+        variableCap: spending.variableCap,
+        actualSpending: spending.actualSpending,
+        percentUsed: spending.percentUsed,
+        threshold: spending.threshold,
+      },
     });
   }
 
@@ -112,29 +119,33 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
-
-    const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
-
-    const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);
-    const threshold = (driftRule?.threshold as number) ?? 10;
-    const fired = maxDrift > threshold;
+    const drift = calculateAllocationDrift({
+      income,
+      actualFixed: totalFixed,
+      actualVariable: totalVariable,
+      actualInvestment: investments?.monthlyContribution ?? 0,
+      reallocation,
+      threshold: (driftRule?.threshold as number) ?? 10,
+    });
     alerts.push({
       check: "drift",
-      alert: fired,
-      severity: fired ? (maxDrift > threshold * 2 ? "critical" : "warning") : "info",
+      alert: drift.alert,
+      severity: drift.alert ? (drift.overallDrift > drift.threshold * 2 ? "critical" : "warning") : "info",
       title: "Allocation Drift",
-      message: fired
-        ? `Max drift at ${maxDrift}% (threshold: ${threshold}%).`
-        : `Drift within bounds at ${maxDrift}%.`,
-      data: { categories: drifts, maxDrift, threshold },
+      message: drift.alert
+        ? `Max drift at ${drift.overallDrift}% (threshold: ${drift.threshold}%).`
+        : `Drift within bounds at ${drift.overallDrift}%.`,
+      data: {
+        categories: drift.categories.map(category => ({
+          name: category.name.replace(" Expenses", ""),
+          actual: category.actualPct,
+          planned: category.plannedPct,
+          drift: category.driftPct,
+        })),
+        maxDrift: drift.overallDrift,
+        threshold: drift.threshold,
+      },
     });
   }
 
