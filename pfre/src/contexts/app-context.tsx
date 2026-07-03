@@ -147,7 +147,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const syncToken = getOrCreateSyncToken();
       if (!syncToken) return;
 
-      const { chatHistory: _c, plaidAccessToken: _p, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
+
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json", [STATE_SYNC_TOKEN_HEADER]: syncToken },

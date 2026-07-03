@@ -25,7 +25,9 @@ export function getStateSyncToken(req: Request): string | null {
 }
 
 export function sanitizeServerState(state: Record<string, unknown>): Record<string, unknown> {
-  const { chatHistory: _chatHistory, plaidAccessToken: _plaidAccessToken, ...syncable } = state;
+  const syncable = { ...state };
+  delete syncable.chatHistory;
+  delete syncable.plaidAccessToken;
 
   return {
     ...syncable,
