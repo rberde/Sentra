@@ -3,8 +3,10 @@ import type {
   GoalWeights,
   AllocationBuckets,
 } from "@/lib/types";
+import { normalizeSyncToken } from "@/lib/sync-token";
 
 const STORAGE_KEY = "pfre_state";
+const SYNC_TOKEN_STORAGE_KEY = "pfre_sync_token";
 
 export interface AppState {
   profile: UserProfile | null;
@@ -87,6 +89,31 @@ export function loadState(): AppState {
 export function saveState(state: AppState): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export function getOrCreateSyncToken(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const existing = normalizeSyncToken(localStorage.getItem(SYNC_TOKEN_STORAGE_KEY));
+    if (existing) return existing;
+
+    const token = createSyncToken();
+    localStorage.setItem(SYNC_TOKEN_STORAGE_KEY, token);
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+function createSyncToken(): string {
+  if (crypto.randomUUID) {
+    return `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
+  }
+
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 
 export function createDefaultProfile(): UserProfile {

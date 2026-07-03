@@ -4,6 +4,8 @@ import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import { useToast } from "@/contexts/toast-context";
 import { runAgentChecks } from "@/lib/engine/agent-checks";
+import { getOrCreateSyncToken } from "@/lib/store";
+import { STATE_SYNC_TOKEN_HEADER } from "@/lib/sync-token";
 import type { Expense } from "@/lib/types";
 import { FinancialSnapshot } from "./financial-snapshot";
 import { AllocationEditor } from "./allocation-editor";
@@ -73,10 +75,13 @@ export function DashboardLayout() {
       dispatch({ type: "ADD_NOTIFICATION", notification: n });
     }
     showToasts(notifications);
+    const syncToken = getOrCreateSyncToken();
+    if (!syncToken) return;
+
     // Push to n8n webhook (non-blocking)
     fetch("/api/n8n/trigger", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", [STATE_SYNC_TOKEN_HEADER]: syncToken },
       body: JSON.stringify({
         totalAlerts: notifications.length,
         alerts: notifications.map(n => ({
@@ -128,10 +133,13 @@ export function DashboardLayout() {
         }
         if (notifications.length > 0) {
           showToasts(notifications);
+          const syncToken = getOrCreateSyncToken();
+          if (!syncToken) return;
+
           // Push alerts to n8n webhook (non-blocking)
           fetch("/api/n8n/trigger", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", [STATE_SYNC_TOKEN_HEADER]: syncToken },
             body: JSON.stringify({
               totalAlerts: notifications.length,
               alerts: notifications.map(n => ({
