@@ -12,7 +12,8 @@ import type {
   NotificationSettings,
   ChatMessage,
 } from "@/lib/types";
-import { type AppState, loadState, saveState } from "@/lib/store";
+import { type AppState, getOrCreateSyncToken, loadState, saveState } from "@/lib/store";
+import { STATE_SYNC_TOKEN_HEADER } from "@/lib/sync-token";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -143,10 +144,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncToken = getOrCreateSyncToken();
+      if (!syncToken) return;
+
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
+
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", [STATE_SYNC_TOKEN_HEADER]: syncToken },
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);

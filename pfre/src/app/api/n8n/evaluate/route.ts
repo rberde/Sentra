@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getStateSyncToken, readServerState } from "@/lib/server-state";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -11,7 +11,12 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
-  const state = await readServerState();
+  const syncToken = getStateSyncToken(req);
+  if (!syncToken) {
+    return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+  }
+
+  const state = await readServerState(syncToken);
 
   if (!state || !state.profile) {
     return NextResponse.json({

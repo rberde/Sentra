@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { getOrCreateSyncToken } from "@/lib/store";
+import { STATE_SYNC_TOKEN_HEADER } from "@/lib/sync-token";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -234,13 +236,21 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [syncToken] = useState(() => getOrCreateSyncToken());
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   const checkSync = useCallback(async () => {
+    if (!syncToken) {
+      setStatus("disconnected");
+      return;
+    }
+
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", {
+        headers: { [STATE_SYNC_TOKEN_HEADER]: syncToken },
+      });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -251,16 +261,27 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
-  }, []);
+  }, [syncToken]);
 
   useEffect(() => {
-    checkSync();
+    const checkId = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(checkId);
   }, [checkSync]);
 
   const testEvaluate = async () => {
+    if (!syncToken) {
+      setEvaluateResult({ error: "Missing sync token" });
+      return;
+    }
+
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", {
+        headers: { [STATE_SYNC_TOKEN_HEADER]: syncToken },
+      });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -274,6 +295,11 @@ function N8nConnectionCard() {
       setCopied(label);
       setTimeout(() => setCopied(null), 2000);
     });
+  };
+
+  const endpointUrl = (path: string) => {
+    const tokenParam = syncToken ? `?token=${encodeURIComponent(syncToken)}` : "";
+    return `${baseUrl}${path}${tokenParam}`;
   };
 
   const endpoints = [
@@ -346,12 +372,30 @@ function N8nConnectionCard() {
                   size="sm"
                   variant="ghost"
                   className="shrink-0 ml-2"
-                  onClick={() => copyToClipboard(`${baseUrl}${ep.path}`, ep.path)}
+                  onClick={() => copyToClipboard(endpointUrl(ep.path), ep.path)}
                 >
                   {copied === ep.path ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                 </Button>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Sync Token */}
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+          <p className="text-xs font-semibold text-blue-900">Private Sync Token</p>
+          <p className="text-[11px] text-blue-800 mt-1">
+            n8n polling URLs include this token so only your workflow can read your synced financial snapshot.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate text-[10px] bg-white rounded px-2 py-1 border">
+              {syncToken ?? "Unavailable"}
+            </code>
+            {syncToken && (
+              <Button size="sm" variant="ghost" onClick={() => copyToClipboard(syncToken, "sync-token")}>
+                {copied === "sync-token" ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -427,6 +471,8 @@ function N8nConnectionCard() {
               <p>In n8n Settings → Variables, create:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
                 PFRE_BASE_URL = {baseUrl}
+                <br />
+                PFRE_SYNC_TOKEN = {syncToken ?? "copy-from-private-sync-token"}
               </code>
             </div>
             <div>
