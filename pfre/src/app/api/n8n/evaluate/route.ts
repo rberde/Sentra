@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -11,7 +11,12 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
-  const state = await readServerState();
+  const token = getServerStateToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing monitoring token" }, { status: 401 });
+  }
+
+  const state = await readServerState(token);
 
   if (!state || !state.profile) {
     return NextResponse.json({

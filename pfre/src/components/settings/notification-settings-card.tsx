@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BellRing, Bot, Zap, Shield, Plus, Trash2, Plug, CheckCircle2, XCircle, ExternalLink, Copy, RefreshCw, Loader2, Download } from "lucide-react";
+import { getOrCreateSyncToken } from "@/lib/sync-token";
 
 export function NotificationSettingsCard() {
   const { state, dispatch } = useApp();
@@ -234,13 +235,21 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [monitoringToken, setMonitoringToken] = useState("");
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const tokenQuery = monitoringToken ? `?token=${encodeURIComponent(monitoringToken)}` : "";
+
+  useEffect(() => {
+    setMonitoringToken(getOrCreateSyncToken());
+  }, []);
 
   const checkSync = useCallback(async () => {
+    if (!monitoringToken) return;
+
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch(`/api/state/sync${tokenQuery}`);
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -251,16 +260,18 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
-  }, []);
+  }, [monitoringToken, tokenQuery]);
 
   useEffect(() => {
     checkSync();
   }, [checkSync]);
 
   const testEvaluate = async () => {
+    if (!monitoringToken) return;
+
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch(`/api/n8n/evaluate${tokenQuery}`);
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -346,7 +357,7 @@ function N8nConnectionCard() {
                   size="sm"
                   variant="ghost"
                   className="shrink-0 ml-2"
-                  onClick={() => copyToClipboard(`${baseUrl}${ep.path}`, ep.path)}
+                  onClick={() => copyToClipboard(`${baseUrl}${ep.path}${tokenQuery}`, ep.path)}
                 >
                   {copied === ep.path ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                 </Button>
@@ -357,7 +368,7 @@ function N8nConnectionCard() {
 
         {/* Test Button */}
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={testEvaluate} disabled={testing} className="gap-1.5">
+          <Button size="sm" variant="outline" onClick={testEvaluate} disabled={testing || !monitoringToken} className="gap-1.5">
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
             Test Evaluate Endpoint
           </Button>
@@ -427,6 +438,9 @@ function N8nConnectionCard() {
               <p>In n8n Settings → Variables, create:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
                 PFRE_BASE_URL = {baseUrl}
+              </code>
+              <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
+                PFRE_MONITORING_TOKEN = {monitoringToken || "loading..."}
               </code>
             </div>
             <div>

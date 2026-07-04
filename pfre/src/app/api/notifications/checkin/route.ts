@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
 
-export async function POST() {
-  const state = await readServerState();
+export async function POST(req: Request) {
+  const token = getServerStateToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing monitoring token" }, { status: 401 });
+  }
+
+  const state = await readServerState(token);
 
   if (!state) {
     return NextResponse.json({
