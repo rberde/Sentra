@@ -145,7 +145,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
       const syncToken = getOrCreateSyncToken();
-      const { chatHistory: _chatHistory, plaidAccessToken: _plaidAccessToken, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
         headers: {

@@ -241,7 +241,11 @@ function N8nConnectionCard() {
   const tokenQuery = monitoringToken ? `?token=${encodeURIComponent(monitoringToken)}` : "";
 
   useEffect(() => {
-    setMonitoringToken(getOrCreateSyncToken());
+    const timer = window.setTimeout(() => {
+      setMonitoringToken(getOrCreateSyncToken());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const checkSync = useCallback(async () => {
@@ -263,8 +267,14 @@ function N8nConnectionCard() {
   }, [monitoringToken, tokenQuery]);
 
   useEffect(() => {
-    checkSync();
-  }, [checkSync]);
+    if (!monitoringToken) return;
+
+    const timer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [checkSync, monitoringToken]);
 
   const testEvaluate = async () => {
     if (!monitoringToken) return;
