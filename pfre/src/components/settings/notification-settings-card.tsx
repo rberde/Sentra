@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { useApp } from "@/contexts/app-context";
 import { getSyncToken } from "@/lib/store";
 import type { NotificationRule } from "@/lib/types";
@@ -10,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BellRing, Bot, Zap, Shield, Plus, Trash2, Plug, CheckCircle2, XCircle, ExternalLink, Copy, RefreshCw, Loader2, Download } from "lucide-react";
+
+const subscribeToSyncToken = () => () => {};
+const getServerSyncToken = () => "";
 
 export function NotificationSettingsCard() {
   const { state, dispatch } = useApp();
@@ -235,16 +238,12 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [syncToken, setSyncToken] = useState("");
+  const syncToken = useSyncExternalStore(subscribeToSyncToken, getSyncToken, getServerSyncToken);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
   const withSyncToken = useCallback((path: string) => (
     syncToken ? `${path}${path.includes("?") ? "&" : "?"}token=${encodeURIComponent(syncToken)}` : path
   ), [syncToken]);
-
-  useEffect(() => {
-    setSyncToken(getSyncToken());
-  }, []);
 
   const checkSync = useCallback(async () => {
     if (!syncToken) return;
@@ -266,7 +265,11 @@ function N8nConnectionCard() {
   }, [syncToken]);
 
   useEffect(() => {
-    checkSync();
+    const timeout = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [checkSync]);
 
   const testEvaluate = async () => {

@@ -24,11 +24,9 @@ export function getStateToken(req: Request): string | null {
 }
 
 export function sanitizeServerState(state: Record<string, unknown>): Record<string, unknown> {
-  const {
-    chatHistory: _chatHistory,
-    plaidAccessToken: _plaidAccessToken,
-    ...safeState
-  } = state;
+  const safeState = { ...state };
+  delete safeState.chatHistory;
+  delete safeState.plaidAccessToken;
 
   return safeState;
 }
