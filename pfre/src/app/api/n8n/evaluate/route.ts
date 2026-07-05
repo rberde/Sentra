@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getStateToken, readServerState } from "@/lib/server-state";
+import { calculatePercentDriftCategories, calculateSpendingUsage } from "@/lib/engine/monitoring";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -9,9 +10,15 @@ import { readServerState } from "@/lib/server-state";
  *
  * Optional query params:
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
+ *   ?token=<sync-token>           (or send x-pfre-sync-token header)
  */
 export async function GET(req: Request) {
-  const state = await readServerState();
+  const token = getStateToken(req);
+  if (!token) {
+    return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+  }
+
+  const state = await readServerState(token);
 
   if (!state || !state.profile) {
     return NextResponse.json({
@@ -56,8 +63,7 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    const { variableCap, percentUsed } = calculateSpendingUsage(totalVariable, reallocation);
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
     const fired = percentUsed >= threshold;
@@ -112,15 +118,13 @@ export async function GET(req: Request) {
 
   // 4. Drift check
   if (shouldRun("drift") && activePlan && reallocation) {
-    const actualFixedPct = income > 0 ? Math.round((totalFixed / income) * 100) : 0;
-    const actualVariablePct = income > 0 ? Math.round((totalVariable / income) * 100) : 0;
-    const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
-
-    const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
-    ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
+    const drifts = calculatePercentDriftCategories({
+      income,
+      totalFixed,
+      totalVariable,
+      monthlyInvestment: investments?.monthlyContribution ?? 0,
+      reallocation,
+    });
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));
     const driftRule = rules.find(r => r.type === "drift_threshold" && r.enabled);

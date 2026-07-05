@@ -12,7 +12,7 @@ import type {
   NotificationSettings,
   ChatMessage,
 } from "@/lib/types";
-import { type AppState, loadState, saveState } from "@/lib/store";
+import { getSyncToken, type AppState, loadState, saveState } from "@/lib/store";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -143,10 +143,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const { chatHistory: _c, plaidAccessToken: _p, ...syncable } = state;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-pfre-sync-token": getSyncToken() },
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);
