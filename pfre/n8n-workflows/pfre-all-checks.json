@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "url": "={{$env.PFRE_BASE_URL || 'http://localhost:3000'}}/api/n8n/evaluate",
+        "url": "={{($env.PFRE_BASE_URL || 'http://localhost:3000') + '/api/n8n/evaluate?token=' + $env.PFRE_SYNC_TOKEN}}",
         "options": { "timeout": 10000 },
         "sendHeaders": true,
         "headerParameters": {

@@ -15,7 +15,7 @@
     },
     {
       "parameters": {
-        "url": "={{$env.PFRE_BASE_URL || 'http://localhost:3000'}}/api/monitor/spending",
+        "url": "={{($env.PFRE_BASE_URL || 'http://localhost:3000') + '/api/monitor/spending?token=' + $env.PFRE_SYNC_TOKEN}}",
         "options": { "timeout": 10000 }
       },
       "id": "http-spending",

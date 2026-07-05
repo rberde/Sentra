@@ -5,6 +5,7 @@ import type {
 } from "@/lib/types";
 
 const STORAGE_KEY = "pfre_state";
+const SYNC_TOKEN_KEY = "pfre_sync_token";
 
 export interface AppState {
   profile: UserProfile | null;
@@ -87,6 +88,17 @@ export function loadState(): AppState {
 export function saveState(state: AppState): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export function getSyncToken(): string {
+  if (typeof window === "undefined") return "";
+
+  const existing = localStorage.getItem(SYNC_TOKEN_KEY);
+  if (existing) return existing;
+
+  const token = crypto.randomUUID();
+  localStorage.setItem(SYNC_TOKEN_KEY, token);
+  return token;
 }
 
 export function createDefaultProfile(): UserProfile {
