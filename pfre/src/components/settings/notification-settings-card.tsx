@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { getOrCreateSyncToken } from "@/lib/store";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -234,13 +235,22 @@ function N8nConnectionCard() {
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
   const [testing, setTesting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [syncToken, setSyncToken] = useState("");
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const withToken = useCallback((path: string) => {
+    if (!syncToken) return `${baseUrl}${path}`;
+    return `${baseUrl}${path}?token=${encodeURIComponent(syncToken)}`;
+  }, [baseUrl, syncToken]);
 
   const checkSync = useCallback(async () => {
+    if (!syncToken) return;
+
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", {
+        headers: { "x-pfre-sync-token": syncToken },
+      });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -251,16 +261,40 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
+  }, [syncToken]);
+
+  useEffect(() => {
+    let active = true;
+
+    Promise.resolve().then(() => {
+      if (active) {
+        setSyncToken(getOrCreateSyncToken());
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    checkSync();
-  }, [checkSync]);
+    if (!syncToken) return;
+
+    const timer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [checkSync, syncToken]);
 
   const testEvaluate = async () => {
+    if (!syncToken) return;
+
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", {
+        headers: { "x-pfre-sync-token": syncToken },
+      });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -346,7 +380,7 @@ function N8nConnectionCard() {
                   size="sm"
                   variant="ghost"
                   className="shrink-0 ml-2"
-                  onClick={() => copyToClipboard(`${baseUrl}${ep.path}`, ep.path)}
+                  onClick={() => copyToClipboard(withToken(ep.path), ep.path)}
                 >
                   {copied === ep.path ? <CheckCircle2 className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
                 </Button>
@@ -428,6 +462,10 @@ function N8nConnectionCard() {
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
                 PFRE_BASE_URL = {baseUrl}
               </code>
+              <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px] break-all">
+                PFRE_SYNC_TOKEN = {syncToken || "open the app to generate a token"}
+              </code>
+              <p className="mt-1">The imported workflows send this token as <span className="font-mono">x-pfre-sync-token</span>.</p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>

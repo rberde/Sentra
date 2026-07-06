@@ -12,7 +12,7 @@ import type {
   NotificationSettings,
   ChatMessage,
 } from "@/lib/types";
-import { type AppState, loadState, saveState } from "@/lib/store";
+import { getOrCreateSyncToken, type AppState, loadState, saveState } from "@/lib/store";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -133,6 +133,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
   const syncTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const wasOnboarded = useRef(state.onboardingComplete);
 
   useEffect(() => {
     saveState(state);
@@ -143,15 +144,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!state.onboardingComplete) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncToken = getOrCreateSyncToken();
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-pfre-sync-token": syncToken },
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);
     return () => clearTimeout(syncTimer.current);
   }, [state]);
+
+  useEffect(() => {
+    if (wasOnboarded.current && !state.onboardingComplete) {
+      const syncToken = getOrCreateSyncToken();
+      fetch("/api/state/sync", {
+        method: "DELETE",
+        headers: { "x-pfre-sync-token": syncToken },
+      }).catch(() => {});
+    }
+
+    wasOnboarded.current = state.onboardingComplete;
+  }, [state.onboardingComplete]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

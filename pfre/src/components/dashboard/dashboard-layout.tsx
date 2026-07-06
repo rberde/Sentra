@@ -30,7 +30,7 @@ import {
   RefreshCw,
   Loader2,
 } from "lucide-react";
-import type { AppState } from "@/lib/store";
+import { getOrCreateSyncToken, type AppState } from "@/lib/store";
 
 export function DashboardLayout() {
   const { state, dispatch } = useApp();
@@ -76,7 +76,7 @@ export function DashboardLayout() {
     // Push to n8n webhook (non-blocking)
     fetch("/api/n8n/trigger", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-pfre-sync-token": getOrCreateSyncToken() },
       body: JSON.stringify({
         totalAlerts: notifications.length,
         alerts: notifications.map(n => ({
@@ -131,7 +131,7 @@ export function DashboardLayout() {
           // Push alerts to n8n webhook (non-blocking)
           fetch("/api/n8n/trigger", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-pfre-sync-token": getOrCreateSyncToken() },
             body: JSON.stringify({
               totalAlerts: notifications.length,
               alerts: notifications.map(n => ({

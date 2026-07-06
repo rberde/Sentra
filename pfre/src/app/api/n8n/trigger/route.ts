@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
+
+function unauthorized() {
+  return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+}
 
 /**
  * POST /api/n8n/trigger
@@ -10,6 +15,14 @@ import { NextResponse } from "next/server";
  * Body: { alerts: Alert[], profileName: string, planName: string }
  */
 export async function POST(req: Request) {
+  const token = getServerStateToken(req);
+  if (!token) return unauthorized();
+
+  const state = await readServerState(token);
+  if (!state) {
+    return NextResponse.json({ error: "No synced state for this token" }, { status: 404 });
+  }
+
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
 
   if (!n8nWebhookUrl) {
