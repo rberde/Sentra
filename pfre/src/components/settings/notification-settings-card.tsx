@@ -264,13 +264,27 @@ function N8nConnectionCard() {
   }, [syncToken]);
 
   useEffect(() => {
-    setSyncToken(getOrCreateSyncToken());
+    let active = true;
+
+    Promise.resolve().then(() => {
+      if (active) {
+        setSyncToken(getOrCreateSyncToken());
+      }
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (syncToken) {
-      checkSync();
-    }
+    if (!syncToken) return;
+
+    const timer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [checkSync, syncToken]);
 
   const testEvaluate = async () => {
