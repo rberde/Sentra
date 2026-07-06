@@ -1,8 +1,15 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
 
-export async function GET() {
-  const state = await readServerState();
+function unauthorized() {
+  return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+}
+
+export async function GET(req: Request) {
+  const token = getServerStateToken(req);
+  if (!token) return unauthorized();
+
+  const state = await readServerState(token);
 
   if (!state) {
     return NextResponse.json({

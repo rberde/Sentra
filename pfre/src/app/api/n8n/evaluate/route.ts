@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
+import { monthlyPlanAmount, percentOfIncome } from "@/lib/engine/monitoring";
+
+function unauthorized() {
+  return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+}
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -11,7 +16,10 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
-  const state = await readServerState();
+  const token = getServerStateToken(req);
+  if (!token) return unauthorized();
+
+  const state = await readServerState(token);
 
   if (!state || !state.profile) {
     return NextResponse.json({
@@ -56,7 +64,7 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
+    const variableCap = monthlyPlanAmount(reallocation, "variableExpenses");
     const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
@@ -117,9 +125,9 @@ export async function GET(req: Request) {
     const actualInvestPct = income > 0 ? Math.round(((investments?.monthlyContribution ?? 0) / income) * 100) : 0;
 
     const drifts = [
-      { name: "Fixed", actual: actualFixedPct, planned: reallocation.fixedExpenses ?? 0 },
-      { name: "Variable", actual: actualVariablePct, planned: reallocation.variableExpenses ?? 0 },
-      { name: "Investments", actual: actualInvestPct, planned: reallocation.investments ?? 0 },
+      { name: "Fixed", actual: actualFixedPct, planned: percentOfIncome(monthlyPlanAmount(reallocation, "fixedExpenses"), income) },
+      { name: "Variable", actual: actualVariablePct, planned: percentOfIncome(monthlyPlanAmount(reallocation, "variableExpenses"), income) },
+      { name: "Investments", actual: actualInvestPct, planned: percentOfIncome(monthlyPlanAmount(reallocation, "investments"), income) },
     ].map(d => ({ ...d, drift: Math.abs(d.actual - d.planned) }));
 
     const maxDrift = Math.max(...drifts.map(d => d.drift));

@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { getServerStateToken, readServerState } from "@/lib/server-state";
+import { monthlyPlanAmount } from "@/lib/engine/monitoring";
 
-export async function GET() {
-  const state = await readServerState();
+function unauthorized() {
+  return NextResponse.json({ error: "Missing or invalid sync token" }, { status: 401 });
+}
+
+export async function GET(req: Request) {
+  const token = getServerStateToken(req);
+  if (!token) return unauthorized();
+
+  const state = await readServerState(token);
 
   if (!state) {
     return NextResponse.json({
@@ -27,7 +35,6 @@ export async function GET() {
     });
   }
 
-  const income = (profile.monthlyIncome as number) ?? 0;
   const fixedExpenses = (profile.fixedExpenses as Array<{ amount: number }>) ?? [];
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const investments = profile.investments as { totalValue: number; monthlyContribution: number } | undefined;
@@ -37,9 +44,9 @@ export async function GET() {
   const actualInvestment = investments?.monthlyContribution ?? 0;
 
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const plannedFixed = reallocation ? Math.round(income * (reallocation.fixedExpenses ?? 0) / 100) : 0;
-  const plannedVariable = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 0) / 100) : 0;
-  const plannedInvestment = reallocation ? Math.round(income * (reallocation.investments ?? 0) / 100) : 0;
+  const plannedFixed = monthlyPlanAmount(reallocation, "fixedExpenses");
+  const plannedVariable = monthlyPlanAmount(reallocation, "variableExpenses");
+  const plannedInvestment = monthlyPlanAmount(reallocation, "investments");
 
   const categories = [
     { name: "Fixed Expenses", actual: actualFixed, planned: plannedFixed, driftPct: plannedFixed > 0 ? Math.round(Math.abs(actualFixed - plannedFixed) / plannedFixed * 100) : 0 },
