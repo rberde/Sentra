@@ -133,6 +133,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
   const syncTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const syncToken = process.env.NEXT_PUBLIC_PFRE_SYNC_TOKEN;
 
   useEffect(() => {
     saveState(state);
@@ -140,18 +141,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Debounced server-side state sync for n8n monitoring
   useEffect(() => {
-    if (!state.onboardingComplete) return;
+    if (!state.onboardingComplete || !syncToken) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-pfre-sync-token": syncToken },
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);
     return () => clearTimeout(syncTimer.current);
-  }, [state]);
+  }, [state, syncToken]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

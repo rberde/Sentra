@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { authorizeStateRequest, readServerState } from "@/lib/server-state";
+import { getPercentUsed, getVariableSpendingCap } from "@/lib/engine/monitoring";
 
-export async function GET() {
-  const state = await readServerState();
+export async function GET(req: Request) {
+  const auth = authorizeStateRequest(req);
+  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+
+  const state = await readServerState(auth.token);
 
   if (!state) {
     return NextResponse.json({
@@ -34,9 +38,8 @@ export async function GET() {
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const actualSpending = variableExpenses.reduce((s, e) => s + e.amount, 0);
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const income = (profile.monthlyIncome as number) ?? 0;
-  const variableCap = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 20) / 100) : 0;
-  const percentUsed = variableCap > 0 ? Math.round((actualSpending / variableCap) * 100) : 0;
+  const variableCap = getVariableSpendingCap(reallocation);
+  const percentUsed = getPercentUsed(actualSpending, variableCap);
   const daysRemaining = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate();
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];

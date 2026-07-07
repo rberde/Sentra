@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
-import { readServerState } from "@/lib/server-state";
+import { authorizeStateRequest, readServerState } from "@/lib/server-state";
 
-export async function GET() {
-  const state = await readServerState();
+export async function GET(req: Request) {
+  const auth = authorizeStateRequest(req);
+  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+
+  const state = await readServerState(auth.token);
 
   if (!state) {
     return NextResponse.json({
