@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
+import { getStateSyncHeaders } from "@/lib/client-sync";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -240,7 +241,9 @@ function N8nConnectionCard() {
   const checkSync = useCallback(async () => {
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", {
+        headers: getStateSyncHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -254,13 +257,18 @@ function N8nConnectionCard() {
   }, []);
 
   useEffect(() => {
-    checkSync();
+    const timer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [checkSync]);
 
   const testEvaluate = async () => {
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", {
+        headers: getStateSyncHeaders(),
+      });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -427,7 +435,10 @@ function N8nConnectionCard() {
               <p>In n8n Settings → Variables, create:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
                 PFRE_BASE_URL = {baseUrl}
+                <br />
+                PFRE_SYNC_TOKEN = your-shared-sync-token
               </code>
+              <p className="mt-1">Set the same value as <code>PFRE_SYNC_TOKEN</code> on the app server. To let the browser sync state, also set <code>NEXT_PUBLIC_PFRE_SYNC_TOKEN</code> to that value.</p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>

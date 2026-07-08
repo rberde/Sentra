@@ -17,6 +17,7 @@ import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { CLIENT_STATE_SYNC_TOKEN, getStateSyncHeaders } from "@/lib/client-sync";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -42,6 +43,12 @@ export function DashboardLayout() {
 
   const handleReset = () => {
     if (confirm("Reset all data? This will clear your profile and start over.")) {
+      if (CLIENT_STATE_SYNC_TOKEN) {
+        fetch("/api/state/sync", {
+          method: "DELETE",
+          headers: getStateSyncHeaders(),
+        }).catch(() => {});
+      }
       dispatch({ type: "RESET_STATE" });
     }
   };
@@ -73,24 +80,26 @@ export function DashboardLayout() {
       dispatch({ type: "ADD_NOTIFICATION", notification: n });
     }
     showToasts(notifications);
-    // Push to n8n webhook (non-blocking)
-    fetch("/api/n8n/trigger", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        totalAlerts: notifications.length,
-        alerts: notifications.map(n => ({
-          check: n.type,
-          alert: true,
-          severity: n.severity,
-          title: n.title,
-          message: n.message,
-        })),
-        profileName: state.profile?.name ?? "User",
-        planName: state.rebalancingPlans.find(p => p.id === state.selectedPlanId)?.name ?? null,
-        simulated: true,
-      }),
-    }).catch(() => {});
+    if (CLIENT_STATE_SYNC_TOKEN) {
+      // Push to n8n webhook (non-blocking)
+      fetch("/api/n8n/trigger", {
+        method: "POST",
+        headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({
+          totalAlerts: notifications.length,
+          alerts: notifications.map(n => ({
+            check: n.type,
+            alert: true,
+            severity: n.severity,
+            title: n.title,
+            message: n.message,
+          })),
+          profileName: state.profile?.name ?? "User",
+          planName: state.rebalancingPlans.find(p => p.id === state.selectedPlanId)?.name ?? null,
+          simulated: true,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const handleRefreshPlaid = useCallback(async () => {
@@ -128,23 +137,25 @@ export function DashboardLayout() {
         }
         if (notifications.length > 0) {
           showToasts(notifications);
-          // Push alerts to n8n webhook (non-blocking)
-          fetch("/api/n8n/trigger", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              totalAlerts: notifications.length,
-              alerts: notifications.map(n => ({
-                check: n.type,
-                alert: true,
-                severity: n.severity,
-                title: n.title,
-                message: n.message,
-              })),
-              profileName: updatedProfile.name,
-              planName: state.rebalancingPlans.find(p => p.id === state.selectedPlanId)?.name ?? null,
-            }),
-          }).catch(() => {});
+          if (CLIENT_STATE_SYNC_TOKEN) {
+            // Push alerts to n8n webhook (non-blocking)
+            fetch("/api/n8n/trigger", {
+              method: "POST",
+              headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({
+                totalAlerts: notifications.length,
+                alerts: notifications.map(n => ({
+                  check: n.type,
+                  alert: true,
+                  severity: n.severity,
+                  title: n.title,
+                  message: n.message,
+                })),
+                profileName: updatedProfile.name,
+                planName: state.rebalancingPlans.find(p => p.id === state.selectedPlanId)?.name ?? null,
+              }),
+            }).catch(() => {});
+          }
         }
       }
     } catch (error) {
