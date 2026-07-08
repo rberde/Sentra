@@ -12,6 +12,7 @@ import type {
   NotificationSettings,
   ChatMessage,
 } from "@/lib/types";
+import { CLIENT_STATE_SYNC_TOKEN, getStateSyncHeaders } from "@/lib/client-sync";
 import { type AppState, loadState, saveState } from "@/lib/store";
 
 type Action =
@@ -140,13 +141,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Debounced server-side state sync for n8n monitoring
   useEffect(() => {
-    if (!state.onboardingComplete) return;
+    if (!state.onboardingComplete || !CLIENT_STATE_SYNC_TOKEN) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);

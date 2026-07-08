@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { authorizeStateRequest } from "@/lib/server-state";
 
 /**
  * POST /api/n8n/trigger
@@ -10,6 +11,9 @@ import { NextResponse } from "next/server";
  * Body: { alerts: Alert[], profileName: string, planName: string }
  */
 export async function POST(req: Request) {
+  const auth = authorizeStateRequest(req);
+  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+
   const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
 
   if (!n8nWebhookUrl) {
@@ -37,7 +41,6 @@ export async function POST(req: Request) {
     return NextResponse.json({
       status: "ok",
       n8nResponse: result,
-      forwardedTo: n8nWebhookUrl,
     });
   } catch (error) {
     console.error("n8n trigger error:", error);
