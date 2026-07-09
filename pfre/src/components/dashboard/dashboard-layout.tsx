@@ -168,7 +168,7 @@ export function DashboardLayout() {
     } finally {
       setRefreshingPlaid(false);
     }
-  }, [state, dispatch, showToasts]);
+  }, [state, dispatch, showToasts, syncToken]);
 
   return (
     <div className="min-h-screen bg-slate-50">
