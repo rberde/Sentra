@@ -16,6 +16,12 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Server-side monitoring sync
+
+The `/api/state/sync`, `/api/monitor/*`, `/api/n8n/evaluate`, `/api/n8n/trigger`, and `/api/notifications/checkin` endpoints require a shared sync token before they read, write, or forward financial state.
+
+Set `PFRE_SYNC_TOKEN` on the server and in n8n. In the app, enter the same value in Settings -> n8n Automation Integration -> Shared sync token so the browser can sync state without bundling the secret into public client code. Without these values, server-side monitoring stays disabled instead of exposing the last synced financial profile.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
