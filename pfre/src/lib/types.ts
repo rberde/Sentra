@@ -199,6 +199,7 @@ export interface NotificationRule {
 }
 
 export interface NotificationSettings {
+  syncToken?: string;
   pingWindowStart: string; // "HH:mm"
   pingWindowEnd: string;   // "HH:mm"
   frequency: "realtime" | "daily_digest" | "weekly_digest";

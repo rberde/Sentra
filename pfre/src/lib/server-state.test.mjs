@@ -90,12 +90,19 @@ test("writeServerState persists token-scoped sanitized state", async () => {
       profile: { name: "Avery", monthlyIncome: 8000 },
       plaidAccessToken: "access-sandbox-secret",
       chatHistory: [{ role: "user", content: "hello" }],
+      notificationSettings: {
+        syncToken: "secret",
+        channels: { inApp: true, sms: false, push: false },
+      },
       lastSyncedAt: "2026-07-07T11:00:00.000Z",
     });
 
     const state = await readServerState("secret");
     assert.deepEqual(state, {
       profile: { name: "Avery", monthlyIncome: 8000 },
+      notificationSettings: {
+        channels: { inApp: true, sms: false, push: false },
+      },
       lastSyncedAt: "2026-07-07T11:00:00.000Z",
     });
     assert.equal(await readServerState("other-secret"), null);
@@ -105,6 +112,7 @@ test("writeServerState persists token-scoped sanitized state", async () => {
     assert.equal(raw.includes("access-sandbox-secret"), false);
     assert.equal(raw.includes("chatHistory"), false);
     assert.equal(raw.includes("plaidAccessToken"), false);
+    assert.equal(raw.includes("syncToken"), false);
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

@@ -70,6 +70,17 @@ export function sanitizeServerState(state: Record<string, unknown>): Record<stri
   const safeState = { ...state };
   delete safeState.chatHistory;
   delete safeState.plaidAccessToken;
+
+  if (
+    safeState.notificationSettings &&
+    typeof safeState.notificationSettings === "object" &&
+    !Array.isArray(safeState.notificationSettings)
+  ) {
+    const notificationSettings = { ...(safeState.notificationSettings as Record<string, unknown>) };
+    delete notificationSettings.syncToken;
+    safeState.notificationSettings = notificationSettings;
+  }
+
   return safeState;
 }
 

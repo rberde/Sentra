@@ -1,9 +1,16 @@
-export const CLIENT_STATE_SYNC_TOKEN = process.env.NEXT_PUBLIC_PFRE_SYNC_TOKEN;
+export function hasStateSyncToken(token: string | null | undefined): token is string {
+  return !!token?.trim();
+}
 
-export function getStateSyncHeaders(headers: Record<string, string> = {}): Record<string, string> {
-  if (!CLIENT_STATE_SYNC_TOKEN) return headers;
+export function getStateSyncHeaders(
+  token: string | null | undefined,
+  headers: Record<string, string> = {},
+): Record<string, string> {
+  const syncToken = token?.trim();
+  if (!syncToken) return headers;
+
   return {
     ...headers,
-    "x-pfre-sync-token": CLIENT_STATE_SYNC_TOKEN,
+    "x-pfre-sync-token": syncToken,
   };
 }

@@ -38,6 +38,7 @@ function defaultState(): AppState {
     plaidAccessToken: null,
     chatHistory: [],
     notificationSettings: {
+      syncToken: "",
       pingWindowStart: "09:00",
       pingWindowEnd: "20:00",
       frequency: "daily_digest",
@@ -74,6 +75,9 @@ export function loadState(): AppState {
     if (parsed.chatHistory === undefined) parsed.chatHistory = [];
     if (parsed.notificationSettings === undefined) {
       parsed.notificationSettings = defaultState().notificationSettings;
+    }
+    if (parsed.notificationSettings && parsed.notificationSettings.syncToken === undefined) {
+      parsed.notificationSettings.syncToken = "";
     }
     if (parsed.notificationSettings && parsed.notificationSettings.rules === undefined) {
       parsed.notificationSettings.rules = defaultState().notificationSettings.rules;

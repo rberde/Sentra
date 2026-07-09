@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
-import { getStateSyncHeaders } from "@/lib/client-sync";
+import { getStateSyncHeaders, hasStateSyncToken } from "@/lib/client-sync";
 import type { NotificationRule } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -222,14 +222,22 @@ export function NotificationSettingsCard() {
         </CardContent>
       </Card>
 
-      <N8nConnectionCard />
+      <N8nConnectionCard
+        syncToken={settings.syncToken ?? ""}
+        onSyncTokenChange={syncToken => update({ syncToken })}
+      />
     </div>
   );
 }
 
 /* ─── n8n Integration Section ─── */
 
-function N8nConnectionCard() {
+interface N8nConnectionCardProps {
+  syncToken: string;
+  onSyncTokenChange: (syncToken: string) => void;
+}
+
+function N8nConnectionCard({ syncToken, onSyncTokenChange }: N8nConnectionCardProps) {
   const [status, setStatus] = useState<"idle" | "checking" | "connected" | "disconnected">("idle");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
@@ -239,10 +247,16 @@ function N8nConnectionCard() {
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
 
   const checkSync = useCallback(async () => {
+    if (!hasStateSyncToken(syncToken)) {
+      setLastSync(null);
+      setStatus("disconnected");
+      return;
+    }
+
     setStatus("checking");
     try {
       const res = await fetch("/api/state/sync", {
-        headers: getStateSyncHeaders(),
+        headers: getStateSyncHeaders(syncToken),
       });
       if (res.ok) {
         const data = await res.json();
@@ -254,7 +268,7 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
-  }, []);
+  }, [syncToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -264,10 +278,15 @@ function N8nConnectionCard() {
   }, [checkSync]);
 
   const testEvaluate = async () => {
+    if (!hasStateSyncToken(syncToken)) {
+      setEvaluateResult({ error: "Enter the shared sync token before testing." });
+      return;
+    }
+
     setTesting(true);
     try {
       const res = await fetch("/api/n8n/evaluate", {
-        headers: getStateSyncHeaders(),
+        headers: getStateSyncHeaders(syncToken),
       });
       const data = await res.json();
       setEvaluateResult(data);
@@ -312,6 +331,22 @@ function N8nConnectionCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Shared sync token</Label>
+          <Input
+            type="password"
+            className="h-8 text-sm"
+            value={syncToken}
+            onChange={e => onSyncTokenChange(e.target.value)}
+            placeholder="Same value as server PFRE_SYNC_TOKEN"
+            autoComplete="off"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Stored only in this browser and sent as an API header; do not expose this as a
+            NEXT_PUBLIC environment variable.
+          </p>
+        </div>
+
         {/* Connection Status */}
         <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
           <div className="flex items-center gap-2">
@@ -438,7 +473,10 @@ function N8nConnectionCard() {
                 <br />
                 PFRE_SYNC_TOKEN = your-shared-sync-token
               </code>
-              <p className="mt-1">Set the same value as <code>PFRE_SYNC_TOKEN</code> on the app server. To let the browser sync state, also set <code>NEXT_PUBLIC_PFRE_SYNC_TOKEN</code> to that value.</p>
+              <p className="mt-1">
+                Set the same value as <code>PFRE_SYNC_TOKEN</code> on the app server and enter it in
+                the Shared sync token field above. Do not publish it with a <code>NEXT_PUBLIC</code> environment variable.
+              </p>
             </div>
             <div>
               <p className="font-medium text-slate-700">4. Enable Notification Nodes</p>

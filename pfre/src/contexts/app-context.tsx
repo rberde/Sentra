@@ -12,7 +12,7 @@ import type {
   NotificationSettings,
   ChatMessage,
 } from "@/lib/types";
-import { CLIENT_STATE_SYNC_TOKEN, getStateSyncHeaders } from "@/lib/client-sync";
+import { getStateSyncHeaders, hasStateSyncToken } from "@/lib/client-sync";
 import { type AppState, loadState, saveState } from "@/lib/store";
 
 type Action =
@@ -102,6 +102,7 @@ function reducer(state: AppState, action: Action): AppState {
         plaidAccessToken: null,
         chatHistory: [],
         notificationSettings: {
+          syncToken: "",
           pingWindowStart: "09:00",
           pingWindowEnd: "20:00",
           frequency: "daily_digest",
@@ -141,7 +142,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Debounced server-side state sync for n8n monitoring
   useEffect(() => {
-    if (!state.onboardingComplete || !CLIENT_STATE_SYNC_TOKEN) return;
+    const syncToken = state.notificationSettings.syncToken;
+    if (!state.onboardingComplete || !hasStateSyncToken(syncToken)) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
       const syncable: Partial<AppState> = { ...state };
@@ -149,7 +151,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       delete syncable.plaidAccessToken;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
+        headers: getStateSyncHeaders(syncToken, { "Content-Type": "application/json" }),
         body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
       }).catch(() => {});
     }, 3000);

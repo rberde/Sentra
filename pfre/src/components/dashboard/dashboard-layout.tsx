@@ -17,7 +17,7 @@ import { ChatSidebar } from "@/components/chat/chat-sidebar";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { CLIENT_STATE_SYNC_TOKEN, getStateSyncHeaders } from "@/lib/client-sync";
+import { getStateSyncHeaders, hasStateSyncToken } from "@/lib/client-sync";
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -40,13 +40,14 @@ export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshingPlaid, setRefreshingPlaid] = useState(false);
   const unreadNotifications = state.notifications.filter(n => !n.isDismissed).length;
+  const syncToken = state.notificationSettings.syncToken;
 
   const handleReset = () => {
     if (confirm("Reset all data? This will clear your profile and start over.")) {
-      if (CLIENT_STATE_SYNC_TOKEN) {
+      if (hasStateSyncToken(syncToken)) {
         fetch("/api/state/sync", {
           method: "DELETE",
-          headers: getStateSyncHeaders(),
+          headers: getStateSyncHeaders(syncToken),
         }).catch(() => {});
       }
       dispatch({ type: "RESET_STATE" });
@@ -80,11 +81,11 @@ export function DashboardLayout() {
       dispatch({ type: "ADD_NOTIFICATION", notification: n });
     }
     showToasts(notifications);
-    if (CLIENT_STATE_SYNC_TOKEN) {
+    if (hasStateSyncToken(syncToken)) {
       // Push to n8n webhook (non-blocking)
       fetch("/api/n8n/trigger", {
         method: "POST",
-        headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
+        headers: getStateSyncHeaders(syncToken, { "Content-Type": "application/json" }),
         body: JSON.stringify({
           totalAlerts: notifications.length,
           alerts: notifications.map(n => ({
@@ -118,8 +119,12 @@ export function DashboardLayout() {
 
       const updatedProfile = { ...state.profile };
       if (typeof autofill.cashBuffer === "number") updatedProfile.cashBuffer = autofill.cashBuffer;
-      if (autofill.fixedExpenses?.length) updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
-      if (autofill.variableExpenses?.length) updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
+      if (autofill.fixedExpenses?.length && updatedProfile.fixedExpenses.length === 0) {
+        updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
+      }
+      if (autofill.variableExpenses?.length && updatedProfile.variableExpenses.length === 0) {
+        updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
+      }
       const holdingsTotal = (autofill.investmentHoldings ?? []).reduce(
         (s: number, h: { value: number }) => s + h.value, 0
       );
@@ -137,11 +142,11 @@ export function DashboardLayout() {
         }
         if (notifications.length > 0) {
           showToasts(notifications);
-          if (CLIENT_STATE_SYNC_TOKEN) {
+          if (hasStateSyncToken(syncToken)) {
             // Push alerts to n8n webhook (non-blocking)
             fetch("/api/n8n/trigger", {
               method: "POST",
-              headers: getStateSyncHeaders({ "Content-Type": "application/json" }),
+              headers: getStateSyncHeaders(syncToken, { "Content-Type": "application/json" }),
               body: JSON.stringify({
                 totalAlerts: notifications.length,
                 alerts: notifications.map(n => ({
