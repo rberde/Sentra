@@ -145,13 +145,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!syncToken) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const {
-        chatHistory: _chatHistory,
-        plaidAccessToken: _plaidAccessToken,
-        notificationSettings,
-        ...syncable
-      } = state;
-      const { syncToken: _syncToken, ...safeNotificationSettings } = notificationSettings;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
+      const safeNotificationSettings = { ...state.notificationSettings };
+      delete safeNotificationSettings.syncToken;
       fetch("/api/state/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-pfre-sync-token": syncToken },

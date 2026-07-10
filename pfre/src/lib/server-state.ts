@@ -20,14 +20,13 @@ function stateFileForToken(syncToken: string): string {
 }
 
 export function sanitizeServerState(state: Record<string, unknown>): Record<string, unknown> {
-  const {
-    plaidAccessToken: _plaidAccessToken,
-    chatHistory: _chatHistory,
-    ...sanitized
-  } = state;
+  const sanitized = { ...state };
+  delete sanitized.plaidAccessToken;
+  delete sanitized.chatHistory;
 
   if (isRecord(sanitized.notificationSettings)) {
-    const { syncToken: _syncToken, ...notificationSettings } = sanitized.notificationSettings;
+    const notificationSettings = { ...sanitized.notificationSettings };
+    delete notificationSettings.syncToken;
     sanitized.notificationSettings = notificationSettings;
   }
 
