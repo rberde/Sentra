@@ -1,5 +1,4 @@
 import { timingSafeEqual } from "crypto";
-import { NextResponse } from "next/server";
 
 export const SYNC_TOKEN_HEADER = "x-pfre-sync-token";
 
@@ -28,11 +27,11 @@ export function getRequestSyncToken(req: Request): string | null {
   return null;
 }
 
-export function requireSyncAuth(req: Request): { token: string } | { response: NextResponse } {
+export function requireSyncAuth(req: Request): { token: string } | { response: Response } {
   const expectedToken = configuredSyncToken();
   if (!expectedToken) {
     return {
-      response: NextResponse.json(
+      response: Response.json(
         { error: "PFRE_SYNC_TOKEN is not configured" },
         { status: 503 },
       ),
@@ -42,7 +41,7 @@ export function requireSyncAuth(req: Request): { token: string } | { response: N
   const suppliedToken = getRequestSyncToken(req);
   if (!suppliedToken || !safeEquals(suppliedToken, expectedToken)) {
     return {
-      response: NextResponse.json(
+      response: Response.json(
         { error: "Unauthorized" },
         { status: 401 },
       ),
