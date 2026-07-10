@@ -3,14 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  deleteServerState,
-  readServerState,
-  sanitizeServerState,
-  writeServerState,
-} from "./server-state.ts";
 
-test("sanitizeServerState removes secrets before persistence", () => {
+test("sanitizeServerState removes secrets before persistence", async () => {
+  const { sanitizeServerState } = await import(`./server-state.ts?sanitize=${Date.now()}`);
   const sanitized = sanitizeServerState({
     plaidAccessToken: "access-token",
     chatHistory: [{ role: "user", content: "private" }],
@@ -33,6 +28,11 @@ test("server state is isolated by sync token and stored without secrets", async 
 
   try {
     process.chdir(tempDir);
+    const {
+      deleteServerState,
+      readServerState,
+      writeServerState,
+    } = await import(`./server-state.ts?state=${Date.now()}`);
 
     await writeServerState({
       profile: { name: "User A" },
