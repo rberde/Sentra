@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { requireSyncAuth } from "@/lib/sync-auth";
 
-export async function GET() {
-  const state = await readServerState();
+export async function GET(req: Request) {
+  const auth = requireSyncAuth(req);
+  if ("response" in auth) return auth.response;
+
+  const state = await readServerState(auth.token);
 
   if (!state) {
     return NextResponse.json({

@@ -39,9 +39,19 @@ export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshingPlaid, setRefreshingPlaid] = useState(false);
   const unreadNotifications = state.notifications.filter(n => !n.isDismissed).length;
+  const syncToken = state.notificationSettings.syncToken?.trim();
+  const n8nHeaders = syncToken
+    ? { "Content-Type": "application/json", "x-pfre-sync-token": syncToken }
+    : { "Content-Type": "application/json" };
 
   const handleReset = () => {
     if (confirm("Reset all data? This will clear your profile and start over.")) {
+      if (syncToken) {
+        fetch("/api/state/sync", {
+          method: "DELETE",
+          headers: { "x-pfre-sync-token": syncToken },
+        }).catch(() => {});
+      }
       dispatch({ type: "RESET_STATE" });
     }
   };
@@ -76,7 +86,7 @@ export function DashboardLayout() {
     // Push to n8n webhook (non-blocking)
     fetch("/api/n8n/trigger", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: n8nHeaders,
       body: JSON.stringify({
         totalAlerts: notifications.length,
         alerts: notifications.map(n => ({
@@ -131,7 +141,7 @@ export function DashboardLayout() {
           // Push alerts to n8n webhook (non-blocking)
           fetch("/api/n8n/trigger", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: n8nHeaders,
             body: JSON.stringify({
               totalAlerts: notifications.length,
               alerts: notifications.map(n => ({

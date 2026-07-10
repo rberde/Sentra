@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readServerState } from "@/lib/server-state";
+import { requireSyncAuth } from "@/lib/sync-auth";
 
 /**
  * Comprehensive n8n evaluation endpoint.
@@ -11,7 +12,10 @@ import { readServerState } from "@/lib/server-state";
  *   ?checks=spending,liquidity   (comma-separated, defaults to all)
  */
 export async function GET(req: Request) {
-  const state = await readServerState();
+  const auth = requireSyncAuth(req);
+  if ("response" in auth) return auth.response;
+
+  const state = await readServerState(auth.token);
 
   if (!state || !state.profile) {
     return NextResponse.json({
