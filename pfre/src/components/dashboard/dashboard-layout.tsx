@@ -32,6 +32,14 @@ import {
 } from "lucide-react";
 import type { AppState } from "@/lib/store";
 
+function buildN8nHeaders(syncToken?: string): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (syncToken) {
+    headers["x-pfre-sync-token"] = syncToken;
+  }
+  return headers;
+}
+
 export function DashboardLayout() {
   const { state, dispatch } = useApp();
   const { showToasts } = useToast();
@@ -39,9 +47,16 @@ export function DashboardLayout() {
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshingPlaid, setRefreshingPlaid] = useState(false);
   const unreadNotifications = state.notifications.filter(n => !n.isDismissed).length;
+  const syncToken = state.notificationSettings.syncToken?.trim();
 
   const handleReset = () => {
     if (confirm("Reset all data? This will clear your profile and start over.")) {
+      if (syncToken) {
+        fetch("/api/state/sync", {
+          method: "DELETE",
+          headers: { "x-pfre-sync-token": syncToken },
+        }).catch(() => {});
+      }
       dispatch({ type: "RESET_STATE" });
     }
   };
@@ -76,7 +91,7 @@ export function DashboardLayout() {
     // Push to n8n webhook (non-blocking)
     fetch("/api/n8n/trigger", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildN8nHeaders(syncToken),
       body: JSON.stringify({
         totalAlerts: notifications.length,
         alerts: notifications.map(n => ({
@@ -131,7 +146,7 @@ export function DashboardLayout() {
           // Push alerts to n8n webhook (non-blocking)
           fetch("/api/n8n/trigger", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: buildN8nHeaders(syncToken),
             body: JSON.stringify({
               totalAlerts: notifications.length,
               alerts: notifications.map(n => ({
@@ -152,7 +167,7 @@ export function DashboardLayout() {
     } finally {
       setRefreshingPlaid(false);
     }
-  }, [state, dispatch, showToasts]);
+  }, [state, dispatch, showToasts, syncToken]);
 
   return (
     <div className="min-h-screen bg-slate-50">
