@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import { useToast } from "@/contexts/toast-context";
+import { mergeExpenses } from "@/lib/expense-merge";
 import { runAgentChecks } from "@/lib/engine/agent-checks";
 import type { Expense } from "@/lib/types";
 import { FinancialSnapshot } from "./financial-snapshot";
@@ -124,8 +125,12 @@ export function DashboardLayout() {
 
       const updatedProfile = { ...state.profile };
       if (typeof autofill.cashBuffer === "number") updatedProfile.cashBuffer = autofill.cashBuffer;
-      if (autofill.fixedExpenses?.length) updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
-      if (autofill.variableExpenses?.length) updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
+      if (autofill.fixedExpenses?.length) {
+        updatedProfile.fixedExpenses = mergeExpenses(updatedProfile.fixedExpenses, autofill.fixedExpenses as Expense[]);
+      }
+      if (autofill.variableExpenses?.length) {
+        updatedProfile.variableExpenses = mergeExpenses(updatedProfile.variableExpenses, autofill.variableExpenses as Expense[]);
+      }
       const holdingsTotal = (autofill.investmentHoldings ?? []).reduce(
         (s: number, h: { value: number }) => s + h.value, 0
       );
