@@ -229,6 +229,7 @@ export function NotificationSettingsCard() {
 /* ─── n8n Integration Section ─── */
 
 function N8nConnectionCard() {
+  const { state, dispatch } = useApp();
   const [status, setStatus] = useState<"idle" | "checking" | "connected" | "disconnected">("idle");
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [evaluateResult, setEvaluateResult] = useState<Record<string, unknown> | null>(null);
@@ -236,11 +237,27 @@ function N8nConnectionCard() {
   const [copied, setCopied] = useState<string | null>(null);
 
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const syncToken = state.notificationSettings.syncToken?.trim() ?? "";
+
+  const updateSyncToken = (token: string) => {
+    dispatch({
+      type: "SET_NOTIFICATION_SETTINGS",
+      settings: { ...state.notificationSettings, syncToken: token },
+    });
+  };
 
   const checkSync = useCallback(async () => {
+    if (!syncToken) {
+      setStatus("disconnected");
+      setLastSync(null);
+      return;
+    }
+
     setStatus("checking");
     try {
-      const res = await fetch("/api/state/sync");
+      const res = await fetch("/api/state/sync", {
+        headers: { "x-pfre-sync-token": syncToken },
+      });
       if (res.ok) {
         const data = await res.json();
         setLastSync(data.lastSyncedAt);
@@ -251,16 +268,21 @@ function N8nConnectionCard() {
     } catch {
       setStatus("disconnected");
     }
-  }, []);
+  }, [syncToken]);
 
   useEffect(() => {
-    checkSync();
+    const timer = window.setTimeout(() => {
+      void checkSync();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [checkSync]);
 
   const testEvaluate = async () => {
     setTesting(true);
     try {
-      const res = await fetch("/api/n8n/evaluate");
+      const res = await fetch("/api/n8n/evaluate", {
+        headers: syncToken ? { "x-pfre-sync-token": syncToken } : undefined,
+      });
       const data = await res.json();
       setEvaluateResult(data);
     } catch {
@@ -304,6 +326,20 @@ function N8nConnectionCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Sync token</Label>
+          <Input
+            type="password"
+            className="h-8 text-sm"
+            placeholder="Enter PFRE_SYNC_TOKEN"
+            value={state.notificationSettings.syncToken ?? ""}
+            onChange={e => updateSyncToken(e.target.value)}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Must match the app&apos;s PFRE_SYNC_TOKEN and the PFRE_SYNC_TOKEN variable in n8n.
+          </p>
+        </div>
+
         {/* Connection Status */}
         <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border">
           <div className="flex items-center gap-2">
@@ -315,6 +351,11 @@ function N8nConnectionCard() {
               <p className="text-sm font-medium">
                 State Sync: {status === "connected" ? "Active" : status === "checking" ? "Checking..." : "Not synced"}
               </p>
+              {!syncToken && (
+                <p className="text-xs text-amber-600">
+                  Add the sync token to enable secured monitoring sync.
+                </p>
+              )}
               {lastSync && (
                 <p className="text-xs text-muted-foreground">
                   Last synced: {new Date(lastSync).toLocaleString()}
@@ -322,7 +363,7 @@ function N8nConnectionCard() {
               )}
             </div>
           </div>
-          <Button size="sm" variant="ghost" onClick={checkSync} disabled={status === "checking"}>
+          <Button size="sm" variant="ghost" onClick={checkSync} disabled={status === "checking" || !syncToken}>
             <RefreshCw className={`w-3 h-3 ${status === "checking" ? "animate-spin" : ""}`} />
           </Button>
         </div>
@@ -357,7 +398,7 @@ function N8nConnectionCard() {
 
         {/* Test Button */}
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={testEvaluate} disabled={testing} className="gap-1.5">
+          <Button size="sm" variant="outline" onClick={testEvaluate} disabled={testing || !syncToken} className="gap-1.5">
             {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
             Test Evaluate Endpoint
           </Button>
@@ -423,10 +464,11 @@ function N8nConnectionCard() {
               <p>Download one of the workflow JSON files above, then in n8n go to <strong>Workflows → Import from File</strong>.</p>
             </div>
             <div>
-              <p className="font-medium text-slate-700">3. Set Environment Variable</p>
-              <p>In n8n Settings → Variables, create:</p>
+              <p className="font-medium text-slate-700">3. Set Environment Variables</p>
+              <p>Set the same secret in the app environment, in this settings card, and in n8n Settings → Variables:</p>
               <code className="block bg-slate-100 rounded px-2 py-1 mt-1 text-[11px]">
-                PFRE_BASE_URL = {baseUrl}
+                PFRE_BASE_URL = {baseUrl}<br />
+                PFRE_SYNC_TOKEN = your-shared-secret
               </code>
             </div>
             <div>

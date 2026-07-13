@@ -57,17 +57,26 @@ function defaultState(): AppState {
   };
 }
 
+function migrateLegacyProfile(parsed: Record<string, unknown>): void {
+  const profile = parsed.profile as Record<string, unknown> | null | undefined;
+  const investments = profile?.investments as Record<string, unknown> | null | undefined;
+  const legacyAllocation = investments?.allocation;
+
+  if (!profile || !investments || !legacyAllocation) return;
+
+  if (!profile.allocation) {
+    profile.allocation = legacyAllocation;
+  }
+  delete investments.allocation;
+}
+
 export function loadState(): AppState {
   if (typeof window === "undefined") return defaultState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    // Migration: if old schema had investment allocation object, reset to fresh state
-    if (parsed.profile?.investments?.allocation) {
-      localStorage.removeItem(STORAGE_KEY);
-      return defaultState();
-    }
+    migrateLegacyProfile(parsed);
     // Ensure new fields exist
     if (parsed.plaidAccounts === undefined) parsed.plaidAccounts = [];
     if (parsed.plaidAccessToken === undefined) parsed.plaidAccessToken = null;
