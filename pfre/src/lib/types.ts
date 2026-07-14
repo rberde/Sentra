@@ -202,6 +202,7 @@ export interface NotificationSettings {
   pingWindowStart: string; // "HH:mm"
   pingWindowEnd: string;   // "HH:mm"
   frequency: "realtime" | "daily_digest" | "weekly_digest";
+  syncToken?: string;
   channels: {
     inApp: boolean;
     sms: boolean;

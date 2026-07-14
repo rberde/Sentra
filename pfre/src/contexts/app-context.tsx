@@ -141,13 +141,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Debounced server-side state sync for n8n monitoring
   useEffect(() => {
     if (!state.onboardingComplete) return;
+    const syncToken = state.notificationSettings.syncToken?.trim();
+    if (!syncToken) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
-      const { chatHistory: _c, ...syncable } = state;
+      const syncable: Partial<AppState> = { ...state };
+      delete syncable.chatHistory;
+      delete syncable.plaidAccessToken;
+      const safeNotificationSettings = { ...state.notificationSettings };
+      delete safeNotificationSettings.syncToken;
       fetch("/api/state/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...syncable, lastSyncedAt: new Date().toISOString() }),
+        headers: { "Content-Type": "application/json", "x-pfre-sync-token": syncToken },
+        body: JSON.stringify({
+          ...syncable,
+          notificationSettings: safeNotificationSettings,
+          lastSyncedAt: new Date().toISOString(),
+        }),
       }).catch(() => {});
     }, 3000);
     return () => clearTimeout(syncTimer.current);
