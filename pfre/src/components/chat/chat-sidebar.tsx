@@ -22,8 +22,8 @@ interface DisplayMessage {
 export function ChatSidebar({ onClose }: Props) {
   const { state, dispatch } = useApp();
   const [input, setInput] = useState("");
+  const [initialMessages] = useState(() => toUIChatMessages(state.chatHistory));
   const scrollEndRef = useRef<HTMLDivElement>(null);
-  const initialMessages = useRef(toUIChatMessages(state.chatHistory));
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/chat",
@@ -38,7 +38,7 @@ export function ChatSidebar({ onClose }: Props) {
 
   const { messages: chatMessages, sendMessage, status, error } = useChat({
     transport,
-    messages: initialMessages.current,
+    messages: initialMessages,
   });
 
   const isLoading = status === "streaming" || status === "submitted";
