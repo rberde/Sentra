@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useApp } from "@/contexts/app-context";
+import { toStoredChatHistory, toUIChatMessages } from "@/lib/chat-history";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Send, Bot, User, Loader2 } from "lucide-react";
@@ -22,6 +23,7 @@ export function ChatSidebar({ onClose }: Props) {
   const { state, dispatch } = useApp();
   const [input, setInput] = useState("");
   const scrollEndRef = useRef<HTMLDivElement>(null);
+  const initialMessages = useRef(toUIChatMessages(state.chatHistory));
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/chat",
@@ -34,7 +36,10 @@ export function ChatSidebar({ onClose }: Props) {
     },
   }), [state.profile, state.riskEvents, state.stressResult, state.rebalancingPlans, state.selectedPlanId]);
 
-  const { messages: chatMessages, sendMessage, status, error } = useChat({ transport });
+  const { messages: chatMessages, sendMessage, status, error } = useChat({
+    transport,
+    messages: initialMessages.current,
+  });
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -62,18 +67,10 @@ export function ChatSidebar({ onClose }: Props) {
   }, [displayMessages.length, isLoading]);
 
   useEffect(() => {
-    const history = chatMessages
-      .map(msg => ({
-        id: msg.id,
-        role: msg.role as "user" | "assistant",
-        content: msg.parts
-          ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map(p => p.text)
-          .join("") || "",
-        createdAt: new Date().toISOString(),
-      }))
-      .filter(m => m.content && (m.role === "user" || m.role === "assistant"));
-    dispatch({ type: "SET_CHAT_HISTORY", history });
+    dispatch({
+      type: "SET_CHAT_HISTORY",
+      history: toStoredChatHistory(chatMessages),
+    });
   }, [chatMessages, dispatch]);
 
   const handleSubmit = (e: React.FormEvent) => {
