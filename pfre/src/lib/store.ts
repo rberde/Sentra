@@ -57,6 +57,28 @@ function defaultState(): AppState {
   };
 }
 
+function migrateLegacyStressResult(parsed: Record<string, unknown>): void {
+  const profile = parsed.profile as UserProfile | null | undefined;
+  const stressResult = parsed.stressResult as Partial<import("@/lib/types").StressResult> | null | undefined;
+  const riskEvents = Array.isArray(parsed.riskEvents)
+    ? parsed.riskEvents as import("@/lib/types").RiskEvent[]
+    : [];
+
+  if (!profile || !stressResult) return;
+
+  if (!Number.isFinite(stressResult.adjustedIncome)) {
+    const incomeReduction = riskEvents
+      .filter(event => event.type === "income_shock")
+      .reduce((total, event) => total + (event.severity / 100) * profile.monthlyIncome, 0);
+    stressResult.adjustedIncome = Math.max(0, profile.monthlyIncome - incomeReduction);
+  }
+
+  if (!Number.isFinite(stressResult.crisisDurationMonths) || stressResult.crisisDurationMonths! <= 0) {
+    const durations = riskEvents.map(event => event.duration > 0 ? event.duration : 6);
+    stressResult.crisisDurationMonths = durations.length > 0 ? Math.max(...durations) : 6;
+  }
+}
+
 export function loadState(): AppState {
   if (typeof window === "undefined") return defaultState();
   try {
@@ -68,6 +90,7 @@ export function loadState(): AppState {
       localStorage.removeItem(STORAGE_KEY);
       return defaultState();
     }
+    migrateLegacyStressResult(parsed);
     // Ensure new fields exist
     if (parsed.plaidAccounts === undefined) parsed.plaidAccounts = [];
     if (parsed.plaidAccessToken === undefined) parsed.plaidAccessToken = null;
