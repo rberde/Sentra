@@ -13,6 +13,7 @@ import type {
   ChatMessage,
 } from "@/lib/types";
 import { type AppState, loadState, saveState } from "@/lib/store";
+import { reconcileSelectedPlanId } from "@/lib/plan-selection";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -50,7 +51,11 @@ function reducer(state: AppState, action: Action): AppState {
     case "SET_STRESS_RESULT":
       return { ...state, stressResult: action.result };
     case "SET_REBALANCING_PLANS":
-      return { ...state, rebalancingPlans: action.plans };
+      return {
+        ...state,
+        rebalancingPlans: action.plans,
+        selectedPlanId: reconcileSelectedPlanId(state.selectedPlanId, action.plans),
+      };
     case "SELECT_PLAN":
       return { ...state, selectedPlanId: action.planId };
     case "ADD_NOTIFICATION":
