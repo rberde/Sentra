@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCheckinDue } from "@/lib/engine/checkin";
 import { readServerState } from "@/lib/server-state";
 
 /**
@@ -142,9 +143,11 @@ export async function GET(req: Request) {
   if (shouldRun("checkin") && activePlan) {
     const checkinRule = rules.find(r => r.type === "scheduled_checkin" && r.enabled);
     const intervalDays = (checkinRule?.intervalDays as number) ?? 30;
-    const planCreated = (activePlan.createdAt as string) ?? new Date().toISOString();
-    const daysSince = Math.floor((Date.now() - new Date(planCreated).getTime()) / (1000 * 60 * 60 * 24));
-    const due = daysSince >= intervalDays;
+    const { due, daysSince } = isCheckinDue(
+      activePlan.createdAt as string | undefined,
+      state.lastSyncedAt as string | undefined,
+      intervalDays,
+    );
     alerts.push({
       check: "checkin",
       alert: due,
@@ -152,7 +155,9 @@ export async function GET(req: Request) {
       title: "Scheduled Check-in",
       message: due
         ? `Check-in due: ${daysSince} days since plan started (interval: ${intervalDays}d).`
-        : `Next check-in in ${intervalDays - daysSince} days.`,
+        : daysSince === null
+          ? `Check-in timing unavailable until plan start time is known.`
+          : `Next check-in in ${intervalDays - daysSince} days.`,
       data: { daysSince, intervalDays, due },
     });
   }

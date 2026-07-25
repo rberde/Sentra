@@ -150,6 +150,8 @@ export interface RebalancingPlan {
   type: PlanType;
   name: string;
   description: string;
+  /** ISO timestamp when this plan was generated; used for scheduled check-in intervals. */
+  createdAt: string;
   monthlyReallocation: BucketReallocation;
   timelineToResolve: number;
   goalImpact: {
