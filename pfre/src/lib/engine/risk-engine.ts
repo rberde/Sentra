@@ -62,10 +62,23 @@ function applyIncomeShock(profile: UserProfile, event: RiskEvent): { incomeReduc
   return { incomeReduction: reduction };
 }
 
-function applyExpenseShock(event: RiskEvent): { additionalMonthlyExpense: number; lumpSum: number } {
+function applyExpenseShock(event: RiskEvent): {
+  additionalMonthlyExpense: number;
+  totalCost: number;
+  durationMonths: number;
+} {
+  const totalCost = event.lumpSum ?? 0;
+  if (totalCost <= 0) {
+    return { additionalMonthlyExpense: 0, totalCost: 0, durationMonths: 0 };
+  }
+  // lumpSum is the total amount to pay; duration is the installment horizon.
+  // Amortize into monthly burn — do not also treat the same dollars as an
+  // immediate liquidity hit (that double-counted medical/expense shocks).
+  const durationMonths = event.duration > 0 ? event.duration : 1;
   return {
-    additionalMonthlyExpense: event.lumpSum && event.duration > 0 ? event.lumpSum / event.duration : 0,
-    lumpSum: event.lumpSum ?? 0,
+    additionalMonthlyExpense: totalCost / durationMonths,
+    totalCost,
+    durationMonths,
   };
 }
 
@@ -89,7 +102,8 @@ export function simulateRiskBucket(
 
   let incomeReduction = 0;
   let additionalMonthlyExpense = 0;
-  let totalLumpSum = 0;
+  let totalExpenseShockCost = 0;
+  let expenseShockDurationMonths = 0;
   let portfolioLoss = 0;
   let monthlyExpenseIncrease = 0;
 
@@ -103,7 +117,11 @@ export function simulateRiskBucket(
       case "expense_shock": {
         const result = applyExpenseShock(event);
         additionalMonthlyExpense += result.additionalMonthlyExpense;
-        totalLumpSum += result.lumpSum;
+        totalExpenseShockCost += result.totalCost;
+        expenseShockDurationMonths = Math.max(
+          expenseShockDurationMonths,
+          result.durationMonths,
+        );
         break;
       }
       case "market_shock": {
@@ -120,15 +138,12 @@ export function simulateRiskBucket(
   }
 
   const adjustedIncome = Math.max(0, profile.monthlyIncome - incomeReduction);
+  // Peak crisis burn (expense installments active). Used for runway / plan pressure.
   const adjustedBurn = baselineBurn + additionalMonthlyExpense + monthlyExpenseIncrease;
   const monthlyDeficit = adjustedBurn - adjustedIncome;
   const stressedPortfolio = Math.max(0, profile.investments.totalValue - portfolioLoss);
 
-  let liquidityPool = constraints.availableLiquidity;
-  if (totalLumpSum > 0) {
-    liquidityPool = Math.max(0, liquidityPool - totalLumpSum);
-  }
-
+  const liquidityPool = constraints.availableLiquidity;
   const liquidityRunway = monthlyDeficit > 0 ? liquidityPool / monthlyDeficit : 99;
 
   const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
@@ -139,8 +154,12 @@ export function simulateRiskBucket(
   let cumExpenses = 0;
 
   for (let m = 1; m <= 24; m++) {
-    const deficit = adjustedBurn - adjustedIncome;
-    cumExpenses += adjustedBurn;
+    // Only apply amortized expense-shock burn during its installment window.
+    const expenseShockThisMonth =
+      m <= expenseShockDurationMonths ? additionalMonthlyExpense : 0;
+    const burnThisMonth = baselineBurn + expenseShockThisMonth + monthlyExpenseIncrease;
+    const deficit = burnThisMonth - adjustedIncome;
+    cumExpenses += burnThisMonth;
 
     if (deficit > 0) {
       if (cashBuf >= deficit) {
@@ -185,7 +204,8 @@ export function simulateRiskBucket(
   // This represents the total cash burn the user faces over the planning horizon.
   const monthlyGap = Math.max(0, adjustedBurn - adjustedIncome);
   const incomeBasedPressure = incomeReduction > 0 ? monthlyGap * crisisDurationMonths : 0;
-  const expenseBasedPressure = totalLumpSum + additionalMonthlyExpense * crisisDurationMonths;
+  // Expense shocks: count the total amount once (already amortized into monthly burn).
+  const expenseBasedPressure = totalExpenseShockCost;
   const totalAdditionalExpense = Math.max(incomeBasedPressure, expenseBasedPressure);
 
   return {
