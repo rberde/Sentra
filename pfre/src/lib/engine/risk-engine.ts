@@ -84,7 +84,11 @@ export function simulateRiskBucket(
   scenario: CompoundRiskScenario,
 ): StressResult {
   const constraints = identifyConstraints(profile);
-  const baselineBurn = constraints.hardConstraints + constraints.softConstraints;
+  const baselineLivingBurn = constraints.hardConstraints + constraints.softConstraints;
+  // Ongoing investment/savings contributions are real monthly outflows. Stress and
+  // rebalancing must include them or plans under-cut the true cashflow hole.
+  const contributionOutflow = constraints.pausable + constraints.redirectable;
+  const baselineBurn = baselineLivingBurn + contributionOutflow;
   const baselineRisk = calculateBaselineRisk(profile);
 
   let incomeReduction = 0;
@@ -120,7 +124,8 @@ export function simulateRiskBucket(
   }
 
   const adjustedIncome = Math.max(0, profile.monthlyIncome - incomeReduction);
-  const adjustedBurn = baselineBurn + additionalMonthlyExpense + monthlyExpenseIncrease;
+  const adjustedBurn =
+    baselineBurn + additionalMonthlyExpense + monthlyExpenseIncrease;
   const monthlyDeficit = adjustedBurn - adjustedIncome;
   const stressedPortfolio = Math.max(0, profile.investments.totalValue - portfolioLoss);
 

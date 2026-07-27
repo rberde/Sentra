@@ -59,7 +59,15 @@ function buildPlan(
     stress.constraintMap.pausable - reallocation.investments +
     stress.constraintMap.redirectable - reallocation.savingsGoal
   );
-  const monthlyGap = Math.max(0, reallocation.fixedExpenses + reallocation.variableExpenses - effectiveIncome);
+  // Include remaining contributions — they still leave the monthly cash account.
+  const monthlyGap = Math.max(
+    0,
+    reallocation.fixedExpenses +
+      reallocation.variableExpenses +
+      reallocation.investments +
+      reallocation.savingsGoal -
+      effectiveIncome,
+  );
   const totalPressure = stress.additionalExpense > 0 ? stress.additionalExpense : monthlyGap * stress.crisisDurationMonths;
   const timelineToResolve = freeablePerMonth > 0 && totalPressure > 0
     ? Math.ceil(totalPressure / freeablePerMonth)
