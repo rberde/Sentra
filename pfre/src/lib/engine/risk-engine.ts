@@ -170,11 +170,42 @@ export function simulateRiskBucket(
     });
   }
 
+  // Build the post-shock profile carefully for scoring:
+  // 1) Keep cash and savings as separate balances (liquidityPool is their sum —
+  //    stuffing it into cashBuffer would double-count savings in calculateBaselineRisk).
+  // 2) Scale contributions down to what remaining surplus can fund so a partial
+  //    income drop cannot inflate savingsRate and make risk look better.
+  let stressedCash = profile.cashBuffer;
+  let stressedSavings = savingsBalance;
+  if (totalLumpSum > 0) {
+    const fromCash = Math.min(stressedCash, totalLumpSum);
+    stressedCash -= fromCash;
+    stressedSavings = Math.max(0, stressedSavings - (totalLumpSum - fromCash));
+  }
+
+  const originalInvContrib = profile.investments.monthlyContribution;
+  const originalSavContrib = profile.savingsGoal?.monthlyContribution ?? 0;
+  const originalContrib = originalInvContrib + originalSavContrib;
+  const postShockSurplus = adjustedIncome - adjustedBurn;
+  const affordableContrib = Math.max(0, Math.min(originalContrib, postShockSurplus));
+  const contribScale = originalContrib > 0 ? affordableContrib / originalContrib : 0;
+
   const stressedProfile: UserProfile = {
     ...profile,
-    cashBuffer: liquidityPool,
-    investments: { ...profile.investments, totalValue: stressedPortfolio },
+    cashBuffer: stressedCash,
     monthlyIncome: adjustedIncome,
+    investments: {
+      ...profile.investments,
+      totalValue: stressedPortfolio,
+      monthlyContribution: originalInvContrib * contribScale,
+    },
+    savingsGoal: profile.savingsGoal
+      ? {
+          ...profile.savingsGoal,
+          currentBalance: stressedSavings,
+          monthlyContribution: originalSavContrib * contribScale,
+        }
+      : null,
   };
   const stressedRisk = calculateBaselineRisk(stressedProfile);
 
