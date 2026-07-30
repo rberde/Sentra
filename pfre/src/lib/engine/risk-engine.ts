@@ -92,12 +92,20 @@ export function simulateRiskBucket(
   let totalLumpSum = 0;
   let portfolioLoss = 0;
   let monthlyExpenseIncrease = 0;
+  // Timeline windows: unknown duration (-1) uses the same 6-month planning horizon
+  // as crisisDurationMonths. Peak-crisis burn/income stay available for runway/plans.
+  let incomeShockDurationMonths = 0;
+  let structuralDriftDurationMonths = 0;
 
   for (const event of scenario.events) {
     switch (event.type) {
       case "income_shock": {
         const result = applyIncomeShock(profile, event);
         incomeReduction += result.incomeReduction;
+        incomeShockDurationMonths = Math.max(
+          incomeShockDurationMonths,
+          event.duration > 0 ? event.duration : 6,
+        );
         break;
       }
       case "expense_shock": {
@@ -114,6 +122,10 @@ export function simulateRiskBucket(
       case "structural_drift": {
         const result = applyStructuralDrift(profile, event);
         monthlyExpenseIncrease += result.monthlyExpenseIncrease;
+        structuralDriftDurationMonths = Math.max(
+          structuralDriftDurationMonths,
+          event.duration > 0 ? event.duration : 6,
+        );
         break;
       }
     }
@@ -139,8 +151,15 @@ export function simulateRiskBucket(
   let cumExpenses = 0;
 
   for (let m = 1; m <= 24; m++) {
-    const deficit = adjustedBurn - adjustedIncome;
-    cumExpenses += adjustedBurn;
+    // Restore pre-shock income / structural expenses after each event's horizon.
+    // Otherwise a 3-month job loss is projected as 24 months of zero income.
+    const incomeThisMonth =
+      m <= incomeShockDurationMonths ? adjustedIncome : profile.monthlyIncome;
+    const structuralThisMonth =
+      m <= structuralDriftDurationMonths ? monthlyExpenseIncrease : 0;
+    const burnThisMonth = baselineBurn + additionalMonthlyExpense + structuralThisMonth;
+    const deficit = burnThisMonth - incomeThisMonth;
+    cumExpenses += burnThisMonth;
 
     if (deficit > 0) {
       if (cashBuf >= deficit) {
