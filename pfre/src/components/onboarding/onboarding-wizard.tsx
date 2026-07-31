@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/app-context";
 import { createDefaultProfile, suggestAllocation } from "@/lib/store";
+import { resolveCashBufferAndSavingsGoal, splitDepositoryBalances } from "@/lib/plaid-balances";
 import type { UserProfile, Expense, IncomeStream, PlaidAccount } from "@/lib/types";
 import { PlaidLinkButton, type PlaidExchangePayload } from "@/components/plaid/plaid-link-button";
 import { Button } from "@/components/ui/button";
@@ -265,39 +266,51 @@ export function OnboardingWizard() {
         type: "fixed" as const,
       }));
 
-    const savingsAccount = (payload.accounts ?? []).find(a => a.type === "savings");
+    const accounts = payload.accounts ?? [];
+    const splitFromAccounts = splitDepositoryBalances(accounts);
+    const checking = typeof autofill.checkingBalance === "number"
+      ? autofill.checkingBalance
+      : splitFromAccounts.checking;
+    const savings = typeof autofill.savingsBalance === "number"
+      ? autofill.savingsBalance
+      : splitFromAccounts.savings;
+    const savingsAccount = accounts.find(a => a.type === "savings");
 
-    setProfile(prev => ({
-      ...prev,
-      cashBuffer: typeof autofill.cashBuffer === "number" ? autofill.cashBuffer : prev.cashBuffer,
-      investments: {
-        ...prev.investments,
-        totalValue: investmentValue > 0 ? investmentValue : prev.investments.totalValue,
-        monthlyContribution: prev.investments.monthlyContribution || 750,
-      },
-      fixedExpenses: prev.fixedExpenses.length === 0
-        ? (shouldSeedExamples
-            ? [...fallback.fixed, ...loanExpenses]
-            : [...(autofill.fixedExpenses ?? prev.fixedExpenses), ...loanExpenses])
-        : prev.fixedExpenses,
-      variableExpenses: prev.variableExpenses.length === 0
-        ? (shouldSeedExamples ? fallback.variable : (autofill.variableExpenses ?? prev.variableExpenses))
-        : prev.variableExpenses,
-      savingsGoal: prev.savingsGoal ?? (savingsAccount && savingsAccount.balance > 0
-        ? {
-            name: "House Down Payment",
-            targetAmount: 100000,
-            targetDate: "2028-12-31",
-            currentBalance: savingsAccount.balance,
-            monthlyContribution: 500,
-            linkedAccountIds: [savingsAccount.accountId],
-          }
-        : prev.savingsGoal),
-    }));
-
-    if (savingsAccount && savingsAccount.balance > 0 && !hasSavingsGoal) {
+    // Preview whether a goal will exist after import (for the checkbox UI).
+    // Actual balances are resolved inside setProfile against the latest prev.
+    if (profile.savingsGoal || savings > 0) {
       setHasSavingsGoal(true);
     }
+
+    setProfile(prev => {
+      const { cashBuffer, savingsGoal } = resolveCashBufferAndSavingsGoal({
+        checking,
+        savings,
+        existingSavingsGoal: prev.savingsGoal,
+        createGoalFromSavings: true,
+        savingsAccountId: savingsAccount?.accountId,
+      });
+
+      return {
+        ...prev,
+        cashBuffer,
+        investments: {
+          ...prev.investments,
+          totalValue: investmentValue > 0 ? investmentValue : prev.investments.totalValue,
+          // Do not invent a contribution — leave 0 until the user sets one.
+          monthlyContribution: prev.investments.monthlyContribution,
+        },
+        fixedExpenses: prev.fixedExpenses.length === 0
+          ? (shouldSeedExamples
+              ? [...fallback.fixed, ...loanExpenses]
+              : [...(autofill.fixedExpenses ?? prev.fixedExpenses), ...loanExpenses])
+          : prev.fixedExpenses,
+        variableExpenses: prev.variableExpenses.length === 0
+          ? (shouldSeedExamples ? fallback.variable : (autofill.variableExpenses ?? prev.variableExpenses))
+          : prev.variableExpenses,
+        savingsGoal,
+      };
+    });
 
     const accessToken = "access_token" in payload ? payload.access_token : state.plaidAccessToken;
     if (payload.accounts && accessToken) {
@@ -325,7 +338,7 @@ export function OnboardingWizard() {
     }
 
     setPlaidSnapshot({
-      cashBuffer: typeof autofill.cashBuffer === "number" ? autofill.cashBuffer : profile.cashBuffer,
+      cashBuffer: checking + savings,
       investmentsTotalValue: investmentValue > 0 ? investmentValue : profile.investments.totalValue,
     });
 

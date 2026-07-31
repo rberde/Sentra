@@ -4,7 +4,8 @@ import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import { useToast } from "@/contexts/toast-context";
 import { runAgentChecks } from "@/lib/engine/agent-checks";
-import type { Expense } from "@/lib/types";
+import { resolveCashBufferAndSavingsGoal, splitDepositoryBalances } from "@/lib/plaid-balances";
+import type { Expense, PlaidAccount } from "@/lib/types";
 import { FinancialSnapshot } from "./financial-snapshot";
 import { AllocationEditor } from "./allocation-editor";
 import { SavingsGoalCard } from "./savings-goal-card";
@@ -108,7 +109,20 @@ export function DashboardLayout() {
       if (!autofill) return;
 
       const updatedProfile = { ...state.profile };
-      if (typeof autofill.cashBuffer === "number") updatedProfile.cashBuffer = autofill.cashBuffer;
+      const accounts = (data.accounts as PlaidAccount[] | undefined) ?? state.plaidAccounts;
+      const split = splitDepositoryBalances(accounts);
+      const checking = typeof autofill.checkingBalance === "number" ? autofill.checkingBalance : split.checking;
+      const savings = typeof autofill.savingsBalance === "number" ? autofill.savingsBalance : split.savings;
+      if (typeof autofill.cashBuffer === "number" || accounts.length > 0) {
+        const resolved = resolveCashBufferAndSavingsGoal({
+          checking,
+          savings,
+          existingSavingsGoal: updatedProfile.savingsGoal,
+          createGoalFromSavings: false,
+        });
+        updatedProfile.cashBuffer = resolved.cashBuffer;
+        updatedProfile.savingsGoal = resolved.savingsGoal;
+      }
       if (autofill.fixedExpenses?.length) updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
       if (autofill.variableExpenses?.length) updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
       const holdingsTotal = (autofill.investmentHoldings ?? []).reduce(

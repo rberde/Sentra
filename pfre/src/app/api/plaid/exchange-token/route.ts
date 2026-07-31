@@ -55,9 +55,16 @@ export async function POST(req: Request) {
       expensesReason = "Transactions were not ready from Plaid yet; balances imported only.";
     }
 
-    const cashBuffer = accounts
-      .filter(a => a.type === "checking" || a.type === "savings")
+    const checkingBalance = accounts
+      .filter(a => a.type === "checking")
       .reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+    const savingsBalance = accounts
+      .filter(a => a.type === "savings")
+      .reduce((sum, a) => sum + Math.max(0, a.balance), 0);
+    // Legacy field: sum of depository balances. Clients that also set
+    // savingsGoal.currentBalance from savings must use checkingBalance for
+    // cashBuffer to avoid double-counting liquidity.
+    const cashBuffer = checkingBalance + savingsBalance;
 
     let investmentsTotalValue = accounts
       .filter(a => a.type === "investment")
@@ -134,6 +141,8 @@ export async function POST(req: Request) {
       accounts,
       autofill: {
         cashBuffer,
+        checkingBalance,
+        savingsBalance,
         investmentsTotalValue,
         investmentHoldings,
         liabilities,
