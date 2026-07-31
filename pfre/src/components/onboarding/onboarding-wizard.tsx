@@ -153,7 +153,10 @@ export function OnboardingWizard() {
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [plaidStatus, setPlaidStatus] = useState<string | null>(null);
   const [plaidSnapshot, setPlaidSnapshot] = useState<{ cashBuffer: number; investmentsTotalValue: number } | null>(null);
-  const [autoRefreshTried, setAutoRefreshTried] = useState(false);
+  // Tracks whether current expense rows are placeholder examples. Real Plaid
+  // imports must be allowed to replace fallbacks once transactions are ready.
+  const [expensesSource, setExpensesSource] = useState<"none" | "fallback" | "plaid" | "manual">("none");
+  const [plaidExpenseRetries, setPlaidExpenseRetries] = useState(0);
 
   const [newExpense, setNewExpense] = useState({ name: "", amount: "", category: "housing", type: "fixed" as "fixed" | "variable" });
   const [newIncomeStream, setNewIncomeStream] = useState({ name: "", amount: "", type: "fixed" as "fixed" | "variable" });
@@ -197,6 +200,7 @@ export function OnboardingWizard() {
       category: newExpense.category as Expense["category"],
       type: newExpense.type,
     };
+    setExpensesSource("manual");
     if (expense.type === "fixed") {
       updateProfile({ fixedExpenses: [...profile.fixedExpenses, expense] });
     } else {
@@ -206,6 +210,7 @@ export function OnboardingWizard() {
   };
 
   const updateExpense = (oldExpense: Expense, updated: Expense) => {
+    setExpensesSource("manual");
     if (oldExpense.type === "fixed") {
       const newFixed = profile.fixedExpenses.map(e => e === oldExpense ? updated : e);
       if (updated.type === "variable") {
@@ -230,6 +235,7 @@ export function OnboardingWizard() {
   };
 
   const removeExpense = (expense: Expense) => {
+    setExpensesSource("manual");
     if (expense.type === "fixed") {
       updateProfile({ fixedExpenses: profile.fixedExpenses.filter(e => e !== expense) });
     } else {
@@ -282,6 +288,21 @@ export function OnboardingWizard() {
       setHasSavingsGoal(true);
     }
 
+    const hasRealPlaidExpenses = !shouldSeedExamples;
+    // Replace empty rows or prior placeholder examples when real Plaid data arrives.
+    // Never clobber expenses the user has manually edited.
+    const canReplaceExpenses =
+      hasRealPlaidExpenses &&
+      (expensesSource === "none" || expensesSource === "fallback" ||
+        (profile.fixedExpenses.length === 0 && profile.variableExpenses.length === 0));
+    const canSeedFallback =
+      shouldSeedExamples &&
+      profile.fixedExpenses.length === 0 &&
+      profile.variableExpenses.length === 0;
+
+    if (canReplaceExpenses) setExpensesSource("plaid");
+    else if (canSeedFallback) setExpensesSource("fallback");
+
     setProfile(prev => {
       const { cashBuffer, savingsGoal } = resolveCashBufferAndSavingsGoal({
         checking,
@@ -290,6 +311,20 @@ export function OnboardingWizard() {
         createGoalFromSavings: true,
         savingsAccountId: savingsAccount?.accountId,
       });
+
+      const nextFixed = canReplaceExpenses
+        ? [...(autofill.fixedExpenses ?? []), ...loanExpenses]
+        : canSeedFallback
+          ? [...fallback.fixed, ...loanExpenses]
+          : prev.fixedExpenses.length === 0 && loanExpenses.length > 0
+            ? [...prev.fixedExpenses, ...loanExpenses]
+            : prev.fixedExpenses;
+
+      const nextVariable = canReplaceExpenses
+        ? (autofill.variableExpenses ?? [])
+        : canSeedFallback
+          ? fallback.variable
+          : prev.variableExpenses;
 
       return {
         ...prev,
@@ -300,14 +335,8 @@ export function OnboardingWizard() {
           // Do not invent a contribution — leave 0 until the user sets one.
           monthlyContribution: prev.investments.monthlyContribution,
         },
-        fixedExpenses: prev.fixedExpenses.length === 0
-          ? (shouldSeedExamples
-              ? [...fallback.fixed, ...loanExpenses]
-              : [...(autofill.fixedExpenses ?? prev.fixedExpenses), ...loanExpenses])
-          : prev.fixedExpenses,
-        variableExpenses: prev.variableExpenses.length === 0
-          ? (shouldSeedExamples ? fallback.variable : (autofill.variableExpenses ?? prev.variableExpenses))
-          : prev.variableExpenses,
+        fixedExpenses: nextFixed,
+        variableExpenses: nextVariable,
         savingsGoal,
       };
     });
@@ -347,7 +376,6 @@ export function OnboardingWizard() {
 
   const refreshFromPlaid = async () => {
     if (!state.plaidAccessToken) return;
-    setAutoRefreshTried(true);
     setRefreshingPlaid(true);
     try {
       const res = await fetch("/api/plaid/autofill", {
@@ -395,16 +423,24 @@ export function OnboardingWizard() {
   useEffect(() => {
     if (step !== 1) return;
     if (!state.plaidAccessToken) return;
-    if (autoRefreshTried || refreshingPlaid) return;
-    if (profile.fixedExpenses.length > 0 || profile.variableExpenses.length > 0) return;
-    void refreshFromPlaid();
+    if (refreshingPlaid) return;
+    // Retry while expenses are empty OR still placeholder examples so a later
+    // PRODUCT_NOT_READY recovery can import real transactions.
+    if (expensesSource === "plaid" || expensesSource === "manual") return;
+    if (plaidExpenseRetries >= 4) return;
+
+    const delayMs = expensesSource === "fallback" ? 2500 : 800;
+    const timer = setTimeout(() => {
+      setPlaidExpenseRetries(n => n + 1);
+      void refreshFromPlaid();
+    }, delayMs);
+    return () => clearTimeout(timer);
   }, [
     step,
     state.plaidAccessToken,
-    autoRefreshTried,
     refreshingPlaid,
-    profile.fixedExpenses.length,
-    profile.variableExpenses.length,
+    expensesSource,
+    plaidExpenseRetries,
   ]);
 
   const handleComplete = () => {

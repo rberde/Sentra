@@ -58,7 +58,7 @@ export function resolveCashBufferAndSavingsGoal(input: {
         targetAmount: 100000,
         targetDate: "2028-12-31",
         currentBalance: savings,
-        monthlyContribution: 500,
+        monthlyContribution: 0,
         linkedAccountIds: savingsAccountId ? [savingsAccountId] : undefined,
       },
       createdSavingsGoal: true,

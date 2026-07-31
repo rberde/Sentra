@@ -29,6 +29,7 @@ describe("resolveCashBufferAndSavingsGoal", () => {
 
     assert.equal(resolved.cashBuffer, 5000);
     assert.equal(resolved.savingsGoal?.currentBalance, 20000);
+    assert.equal(resolved.savingsGoal?.monthlyContribution, 0);
     assert.equal(resolved.createdSavingsGoal, true);
 
     // Engine liquidity is cash + savings goal — must equal real depository total.
