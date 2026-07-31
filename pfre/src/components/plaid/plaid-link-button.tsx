@@ -12,6 +12,8 @@ export type PlaidExchangePayload = {
   accounts: PlaidAccount[];
   autofill?: {
     cashBuffer?: number;
+    checkingBalance?: number;
+    savingsBalance?: number;
     investmentsTotalValue?: number;
     investmentHoldings?: Array<{
       tickerSymbol: string | null;

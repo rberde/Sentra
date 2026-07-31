@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import { simulateRiskBucket } from "@/lib/engine/risk-engine";
 import { generateRebalancingPlans } from "@/lib/engine/rebalancer";
+import { applyFollowupToEvent, suggestEventFromAnswers } from "@/lib/engine/risk-event-parse";
 import type { RiskEvent, RiskBucketType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,190 +70,6 @@ interface AiFlowState {
   originalEvent: RiskEvent | null;
   loading: boolean;
   chatLog: { role: "ai" | "user"; text: string }[];
-}
-
-/**
- * Extracts the first dollar-like number from text, handling commas and $ signs.
- * Returns null if no money-like pattern found.
- */
-function parseMoney(input: string): number | null {
-  // Match patterns like $10,000 or $10000 or 10,000 or 10000
-  const moneyPattern = /\$?\s*([\d,]+(?:\.\d{1,2})?)/;
-  const match = input.replace(/[^\d$,.\s]/g, " ").match(moneyPattern);
-  if (!match) return null;
-  const n = parseFloat(match[1].replace(/,/g, ""));
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n);
-}
-
-function parseMaybePercent(input: string): number | null {
-  const lower = input.toLowerCase();
-  if (lower.includes("lost job") || lower.includes("no income") || lower.includes("zero income") || lower.includes("all of it") || lower.includes("100%")) return 100;
-  if (lower.includes("half") || lower.includes("50%")) return 50;
-  if (lower.includes("quarter") || lower.includes("25%")) return 25;
-
-  // Look for explicit percent pattern like "5%" or "30 percent"
-  const pctMatch = lower.match(/([\d.]+)\s*(%|percent)/);
-  if (pctMatch) {
-    const n = parseFloat(pctMatch[1]);
-    if (Number.isFinite(n) && n > 0 && n <= 100) return Math.round(n);
-  }
-
-  return null;
-}
-
-function parseMaybeDuration(input: string): number {
-  const lower = input.toLowerCase();
-  if (lower.includes("unknown") || lower.includes("not sure") || lower.includes("unsure") || lower.includes("indefinite")) return -1;
-
-  // Look for patterns like "6 weeks", "3 months", "90 days"
-  const weekMatch = lower.match(/([\d.]+)\s*week/);
-  if (weekMatch) {
-    const weeks = parseFloat(weekMatch[1]);
-    if (Number.isFinite(weeks) && weeks > 0) return Math.max(1, Math.round(weeks / 4.345));
-  }
-
-  const dayMatch = lower.match(/([\d.]+)\s*day/);
-  if (dayMatch) {
-    const days = parseFloat(dayMatch[1]);
-    if (Number.isFinite(days) && days > 0) return Math.max(1, Math.round(days / 30));
-  }
-
-  const monthMatch = lower.match(/([\d.]+)\s*month/);
-  if (monthMatch) {
-    const months = parseFloat(monthMatch[1]);
-    if (Number.isFinite(months) && months > 0) return Math.max(1, Math.round(months));
-  }
-
-  const yearMatch = lower.match(/([\d.]+)\s*year/);
-  if (yearMatch) {
-    const years = parseFloat(yearMatch[1]);
-    if (Number.isFinite(years) && years > 0) return Math.round(years * 12);
-  }
-
-  // Bare number — assume months
-  const bare = parseFloat(lower.replace(/[^0-9.]/g, ""));
-  if (Number.isFinite(bare) && bare > 0 && bare <= 120) return Math.max(1, Math.round(bare));
-
-  return -1;
-}
-
-function suggestEventFromAnswers(type: RiskBucketType, answers: string[], profile: { monthlyIncome: number; investments: { totalValue: number } }): RiskEvent {
-  let severity = 100;
-  let duration = -1;
-  let lumpSum: number | undefined;
-
-  const answer1 = answers[0] ?? "";
-  const answer2 = answers[1] ?? "";
-  const money1 = parseMoney(answer1);
-  const parsedPercent = parseMaybePercent(answer1);
-  const parsedDuration = parseMaybeDuration(answer2);
-
-  switch (type) {
-    case "income_shock":
-      if (parsedPercent !== null) {
-        severity = parsedPercent;
-      } else if (money1 !== null && money1 > 0 && profile.monthlyIncome > 0) {
-        severity = Math.round((money1 / profile.monthlyIncome) * 100);
-      }
-      severity = Math.min(100, Math.max(10, severity));
-      duration = parsedDuration;
-      break;
-    case "expense_shock":
-      lumpSum = money1 !== null && money1 > 0 ? money1 : 10000;
-      severity = 100;
-      duration = parsedDuration === -1 ? 1 : parsedDuration;
-      break;
-    case "market_shock":
-      severity = Math.min(80, Math.max(5, parsedPercent ?? 30));
-      duration = parsedDuration === -1 ? 6 : parsedDuration;
-      break;
-    case "structural_drift":
-      severity = Math.min(50, Math.max(5, parsedPercent ?? 15));
-      duration = parsedDuration === -1 ? 12 : parsedDuration;
-      break;
-  }
-
-  return {
-    id: crypto.randomUUID(),
-    type,
-    name: RISK_BUCKETS.find(b => b.type === type)!.name,
-    severity,
-    duration,
-    lumpSum,
-    aiSuggested: true,
-    isActive: true,
-    description: `Based on your answers: "${answers.join('" and "')}"`,
-  };
-}
-
-/**
- * Smarter followup application: determines WHICH field to update based on
- * context clues in the message rather than blindly applying to all fields.
- */
-function applyFollowupToEvent(event: RiskEvent, message: string, monthlyIncome: number): { updated: RiskEvent; explanation: string } {
-  const lower = message.toLowerCase();
-  const next: RiskEvent = { ...event };
-  const changes: string[] = [];
-
-  // Detect intent
-  const mentionsMoney = /\$|dollar|cost|amount|bill|lump|expense|pay|price|owe|interest/i.test(message);
-  const mentionsDuration = /\b(month|week|day|year|long|duration|time|last|until|indefinite|unknown)\b/i.test(message);
-  const mentionsSeverity = /\b(percent|%|severity|half|quarter|all|income|reduction|lost|drop)\b/i.test(message);
-  const mentionsInterestRate = /\b(interest|apr|rate)\b/i.test(lower);
-
-  const money = parseMoney(message);
-  const duration = parseMaybeDuration(message);
-  const percent = parseMaybePercent(message);
-
-  // If message mentions interest rate, don't treat the percentage as severity
-  if (mentionsInterestRate && money !== null) {
-    // Interest rate context: the dollar amount is the expense, not the rate
-    next.lumpSum = money;
-    changes.push(`Expense amount set to $${money.toLocaleString()}`);
-  } else if (mentionsMoney && !mentionsDuration && !mentionsSeverity && money !== null) {
-    // Pure money context → update lumpSum for expense_shock or severity for income
-    if (event.type === "expense_shock") {
-      next.lumpSum = money;
-      changes.push(`Expense amount set to $${money.toLocaleString()}`);
-    } else if (event.type === "income_shock" && monthlyIncome > 0) {
-      next.severity = Math.min(100, Math.max(10, Math.round((money / monthlyIncome) * 100)));
-      changes.push(`Severity set to ${next.severity}%`);
-    }
-  } else if (mentionsDuration && !mentionsMoney && !mentionsSeverity) {
-    // Pure duration context
-    if (duration !== -1) {
-      next.duration = duration;
-      changes.push(`Duration set to ${duration} months`);
-    } else {
-      next.duration = -1;
-      changes.push("Duration set to unknown");
-    }
-  } else if (mentionsSeverity && !mentionsMoney && !mentionsDuration && percent !== null) {
-    next.severity = percent;
-    changes.push(`Severity set to ${percent}%`);
-  } else {
-    // Mixed or ambiguous: apply the most prominent change only
-    if (money !== null && (event.type === "expense_shock" || mentionsMoney)) {
-      next.lumpSum = money;
-      changes.push(`Expense amount set to $${money.toLocaleString()}`);
-    } else if (percent !== null) {
-      next.severity = percent;
-      changes.push(`Severity set to ${percent}%`);
-    }
-    if (duration !== -1 && mentionsDuration) {
-      next.duration = duration;
-      changes.push(`Duration set to ${duration} months`);
-    }
-  }
-
-  if (lower.includes("unknown duration") || lower.includes("not sure how long") || lower.includes("indefinite")) {
-    next.duration = -1;
-    changes.push("Duration set to unknown");
-  }
-
-  const explanation = changes.length > 0 ? changes.join("; ") + "." : "I couldn't determine what to change from that message. Try being more specific.";
-  return { updated: next, explanation };
 }
 
 function EditableEventRow({ event, onSave, onRemove }: { event: RiskEvent; onSave: (e: RiskEvent) => void; onRemove: () => void }) {
@@ -401,7 +218,14 @@ export function RiskEventPanel({ onSimulationComplete }: { onSimulationComplete?
       return;
     }
 
-    const { updated, explanation } = applyFollowupToEvent(aiFlow.suggestedEvent, followupMessage, state.profile!.monthlyIncome);
+    const { updated, explanation } = applyFollowupToEvent(
+      aiFlow.suggestedEvent,
+      followupMessage,
+      {
+        monthlyIncome: state.profile!.monthlyIncome,
+        portfolioValue: state.profile!.investments.totalValue,
+      },
+    );
     newLog.push({ role: "ai", text: explanation });
     setAiFlow({ ...aiFlow, suggestedEvent: updated, chatLog: newLog });
     setFollowupMessage("");
