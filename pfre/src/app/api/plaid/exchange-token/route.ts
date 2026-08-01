@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
-import { buildExpenseEstimates } from "@/lib/plaid-expenses";
+import { buildExpenseEstimates, type EstimatedExpense } from "@/lib/plaid-expenses";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -40,8 +40,8 @@ export async function POST(req: Request) {
     startDate.setDate(startDate.getDate() - 90);
     const endDate = new Date();
 
-    let fixedExpenses: Array<{ name: string; amount: number; category: string; type: "fixed" }> = [];
-    let variableExpenses: Array<{ name: string; amount: number; category: string; type: "variable" }> = [];
+    let fixedExpenses: EstimatedExpense[] = [];
+    let variableExpenses: EstimatedExpense[] = [];
     let expensesReason = "Imported from Plaid transactions.";
 
     try {
