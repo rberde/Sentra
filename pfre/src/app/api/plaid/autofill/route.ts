@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import { buildExpenseEstimates, type EstimatedExpense } from "@/lib/plaid-expenses";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -36,8 +37,8 @@ export async function POST(req: Request) {
     startDate.setDate(startDate.getDate() - 90);
     const endDate = new Date();
 
-    let fixedExpenses: Array<{ name: string; amount: number; category: string; type: "fixed" }> = [];
-    let variableExpenses: Array<{ name: string; amount: number; category: string; type: "variable" }> = [];
+    let fixedExpenses: EstimatedExpense[] = [];
+    let variableExpenses: EstimatedExpense[] = [];
     let expensesReason = "Imported from Plaid transactions.";
 
     try {
@@ -151,89 +152,3 @@ function toPlaidDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function buildExpenseEstimates(transactions: Array<{
-  name: string;
-  amount: number;
-  pending?: boolean;
-  merchant_name?: string | null;
-  personal_finance_category?: { primary?: string | null } | null;
-}>): {
-  fixedExpenses: Array<{ name: string; amount: number; category: string; type: "fixed" }>;
-  variableExpenses: Array<{ name: string; amount: number; category: string; type: "variable" }>;
-} {
-  const expenseTx = transactions.filter(t => !t.pending && t.amount > 0);
-  const monthlyFactor = 90 / 30;
-  const grouped = new Map<string, {
-    name: string;
-    total: number;
-    occurrences: number;
-    category: string;
-  }>();
-
-  for (const tx of expenseTx) {
-    const key = (tx.merchant_name || tx.name || "Unknown").trim().toLowerCase();
-    const entry = grouped.get(key);
-    const category = mapExpenseCategory(tx.personal_finance_category?.primary ?? "");
-    if (entry) {
-      entry.total += tx.amount;
-      entry.occurrences += 1;
-    } else {
-      grouped.set(key, {
-        name: tx.merchant_name || tx.name || "Expense",
-        total: tx.amount,
-        occurrences: 1,
-        category,
-      });
-    }
-  }
-
-  const fixedExpenses: Array<{ name: string; amount: number; category: string; type: "fixed" }> = [];
-  const variableExpenses: Array<{ name: string; amount: number; category: string; type: "variable" }> = [];
-
-  for (const entry of grouped.values()) {
-    const monthlyAmount = Number((entry.total / monthlyFactor).toFixed(2));
-    if (monthlyAmount < 20) continue;
-
-    const normalized = {
-      name: entry.name,
-      amount: monthlyAmount,
-      category: entry.category,
-    };
-    const nameLC = entry.name.toLowerCase();
-    const looksRecurringByName = /\b(internet|mobile|phone|gym|fitness|netflix|spotify|insurance|hydro|electric|gas\s*bill|water\s*bill|rogers|bell|telus|koodo|fido|shaw|cogeco|rent|mortgage|monthly)\b/.test(nameLC);
-    const looksFixed =
-      entry.occurrences >= 2 ||
-      entry.category === "housing" ||
-      entry.category === "insurance" ||
-      entry.category === "loans" ||
-      entry.category === "subscriptions" ||
-      looksRecurringByName;
-
-    if (looksFixed) {
-      fixedExpenses.push({ ...normalized, type: "fixed" });
-    } else {
-      variableExpenses.push({ ...normalized, type: "variable" });
-    }
-  }
-
-  fixedExpenses.sort((a, b) => b.amount - a.amount);
-  variableExpenses.sort((a, b) => b.amount - a.amount);
-
-  return {
-    fixedExpenses: fixedExpenses.slice(0, 10),
-    variableExpenses: variableExpenses.slice(0, 15),
-  };
-}
-
-function mapExpenseCategory(primary: string): "housing" | "transport" | "food" | "insurance" | "loans" | "subscriptions" | "entertainment" | "shopping" | "other" {
-  const value = primary.toUpperCase();
-  if (value.includes("RENT") || value.includes("MORTGAGE") || value.includes("HOUSING")) return "housing";
-  if (value.includes("TRANSPORT") || value.includes("GAS") || value.includes("AUTOMOTIVE")) return "transport";
-  if (value.includes("FOOD") || value.includes("RESTAURANT") || value.includes("GROCERY")) return "food";
-  if (value.includes("INSURANCE")) return "insurance";
-  if (value.includes("LOAN") || value.includes("DEBT")) return "loans";
-  if (value.includes("SUBSCRIPTION") || value.includes("BILL")) return "subscriptions";
-  if (value.includes("ENTERTAINMENT") || value.includes("TRAVEL")) return "entertainment";
-  if (value.includes("SHOPPING") || value.includes("GENERAL_MERCHANDISE")) return "shopping";
-  return "other";
-}
