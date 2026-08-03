@@ -13,6 +13,7 @@ import type {
   ChatMessage,
 } from "@/lib/types";
 import { type AppState, loadState, saveState } from "@/lib/store";
+import { removeRiskEventState } from "@/lib/risk-event-state";
 
 type Action =
   | { type: "SET_PROFILE"; profile: UserProfile }
@@ -44,7 +45,7 @@ function reducer(state: AppState, action: Action): AppState {
     case "UPDATE_RISK_EVENT":
       return { ...state, riskEvents: state.riskEvents.map(e => e.id === action.event.id ? action.event : e) };
     case "REMOVE_RISK_EVENT":
-      return { ...state, riskEvents: state.riskEvents.filter(e => e.id !== action.eventId) };
+      return { ...state, ...removeRiskEventState(state, action.eventId) };
     case "CLEAR_RISK_EVENTS":
       return { ...state, riskEvents: [], stressResult: null, rebalancingPlans: [], selectedPlanId: null };
     case "SET_STRESS_RESULT":
