@@ -83,7 +83,11 @@ function buildPlan(
     : 0;
 
   const growthRate = stress.portfolioStressValue < profile.investments.totalValue ? 0 : 0.005;
-  const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
+  // Start from post-shock reserves (expense lumps already drawn down), matching
+  // liquidity runway. Using pre-shock cash/savings invented ghost net worth.
+  // Fall back for legacy persisted stress results that predate these fields.
+  const startCash = stress.stressedCashBuffer ?? profile.cashBuffer;
+  const startSavings = stress.stressedSavingsBalance ?? (profile.savingsGoal?.currentBalance ?? 0);
 
   return {
     id: `plan_${type}_${Date.now()}`,
@@ -98,9 +102,9 @@ function buildPlan(
       lifestyleReduction: Math.max(0, lifestyleReduction),
     },
     projections: {
-      month6: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 6, growthRate),
-      month12: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 12, growthRate),
-      month24: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 24, growthRate),
+      month6: projectMonth(startCash, startSavings, stress.portfolioStressValue, effectiveIncome, reallocation, 6, growthRate),
+      month12: projectMonth(startCash, startSavings, stress.portfolioStressValue, effectiveIncome, reallocation, 12, growthRate),
+      month24: projectMonth(startCash, startSavings, stress.portfolioStressValue, effectiveIncome, reallocation, 24, growthRate),
     },
     tradeoffSummary: description,
   };
