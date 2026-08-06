@@ -115,6 +115,10 @@ export interface StressResult {
   adjustedIncome: number;         // income after shocks (may be 0 for full job loss)
   liquidityRunway: number;        // months
   portfolioStressValue: number;
+  /** Cash remaining after expense-shock lump sums are paid from reserves. */
+  stressedCashBuffer: number;
+  /** Savings remaining after expense-shock lump sums exhaust cash. */
+  stressedSavingsBalance: number;
   riskScoreBefore: number;        // 0-100
   riskScoreAfter: number;         // 0-100
   riskScoreDelta: number;

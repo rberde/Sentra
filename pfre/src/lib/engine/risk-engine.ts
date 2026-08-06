@@ -69,6 +69,22 @@ function applyExpenseShock(event: RiskEvent): { additionalMonthlyExpense: number
   };
 }
 
+/** Pay an expense-shock lump sum from cash first, then savings. */
+export function drawDownLiquidity(
+  cashBuffer: number,
+  savingsBalance: number,
+  lumpSum: number,
+): { cashBuffer: number; savingsBalance: number } {
+  let cash = Math.max(0, cashBuffer);
+  let savings = Math.max(0, savingsBalance);
+  let remaining = Math.max(0, lumpSum);
+  const fromCash = Math.min(cash, remaining);
+  cash -= fromCash;
+  remaining -= fromCash;
+  savings = Math.max(0, savings - remaining);
+  return { cashBuffer: cash, savingsBalance: savings };
+}
+
 function applyMarketShock(profile: UserProfile, event: RiskEvent): { portfolioLoss: number } {
   const loss = (event.severity / 100) * profile.investments.totalValue;
   return { portfolioLoss: loss };
@@ -124,14 +140,15 @@ export function simulateRiskBucket(
   const monthlyDeficit = adjustedBurn - adjustedIncome;
   const stressedPortfolio = Math.max(0, profile.investments.totalValue - portfolioLoss);
 
-  let liquidityPool = constraints.availableLiquidity;
-  if (totalLumpSum > 0) {
-    liquidityPool = Math.max(0, liquidityPool - totalLumpSum);
-  }
+  const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
+  // Expense lumps are paid from reserves up front (same dollars that feed runway).
+  // Keep cash/savings separate so plan projections and scoring can use real balances.
+  const afterLump = drawDownLiquidity(profile.cashBuffer, savingsBalance, totalLumpSum);
+  const stressedCashBuffer = afterLump.cashBuffer;
+  const stressedSavingsBalance = afterLump.savingsBalance;
+  const liquidityPool = stressedCashBuffer + stressedSavingsBalance;
 
   const liquidityRunway = monthlyDeficit > 0 ? liquidityPool / monthlyDeficit : 99;
-
-  const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
   const timeline: MonthProjection[] = [];
   let cashBuf = profile.cashBuffer;
   let savBal = savingsBalance;
@@ -194,6 +211,8 @@ export function simulateRiskBucket(
     adjustedIncome: adjustedIncome,
     liquidityRunway: Math.round(liquidityRunway * 10) / 10,
     portfolioStressValue: stressedPortfolio,
+    stressedCashBuffer,
+    stressedSavingsBalance,
     riskScoreBefore: baselineRisk,
     riskScoreAfter: stressedRisk,
     riskScoreDelta: stressedRisk - baselineRisk,
