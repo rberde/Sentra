@@ -79,6 +79,57 @@ function applyStructuralDrift(profile: UserProfile, event: RiskEvent): { monthly
   return { monthlyExpenseIncrease: increase };
 }
 
+/** Unknown duration (-1 / 0) uses the same 6-month planning default as crisis horizon. */
+export function eventDurationMonths(event: Pick<RiskEvent, "duration">): number {
+  return event.duration > 0 ? event.duration : 6;
+}
+
+/**
+ * Total cash pressure over a compound scenario, applying each shock only for its
+ * own duration. Income/structural gaps exclude expense installments; expense
+ * shock totals are added once so short income shocks are not multiplied across
+ * a longer medical horizon (and expense dollars are not double-counted).
+ */
+export function calculateDurationAwarePressure(
+  profile: UserProfile,
+  scenario: CompoundRiskScenario,
+  baselineBurn: number,
+): number {
+  if (scenario.events.length === 0) return 0;
+
+  const crisisDurationMonths = Math.max(
+    ...scenario.events.map(eventDurationMonths),
+  );
+
+  let incomeStructuralPressure = 0;
+  for (let m = 1; m <= crisisDurationMonths; m++) {
+    let incomeReduction = 0;
+    let structuralIncrease = 0;
+
+    for (const event of scenario.events) {
+      if (m > eventDurationMonths(event)) continue;
+      if (event.type === "income_shock") {
+        incomeReduction += (event.severity / 100) * profile.monthlyIncome;
+      } else if (event.type === "structural_drift") {
+        structuralIncrease +=
+          (event.severity / 100) * sumExpenses(profile.variableExpenses);
+      }
+    }
+
+    const incomeThisMonth = Math.max(0, profile.monthlyIncome - incomeReduction);
+    incomeStructuralPressure += Math.max(
+      0,
+      baselineBurn + structuralIncrease - incomeThisMonth,
+    );
+  }
+
+  const expenseShockCost = scenario.events
+    .filter((e) => e.type === "expense_shock")
+    .reduce((sum, e) => sum + (e.lumpSum ?? 0), 0);
+
+  return incomeStructuralPressure + expenseShockCost;
+}
+
 export function simulateRiskBucket(
   profile: UserProfile,
   scenario: CompoundRiskScenario,
@@ -178,15 +229,18 @@ export function simulateRiskBucket(
   };
   const stressedRisk = calculateBaselineRisk(stressedProfile);
 
-  const maxDuration = Math.max(...scenario.events.map(e => e.duration > 0 ? e.duration : 6));
-  const crisisDurationMonths = maxDuration;
+  const crisisDurationMonths = Math.max(
+    ...scenario.events.map(eventDurationMonths),
+  );
 
-  // For income shocks, the "additional expense" is the monthly deficit * crisis duration.
-  // This represents the total cash burn the user faces over the planning horizon.
-  const monthlyGap = Math.max(0, adjustedBurn - adjustedIncome);
-  const incomeBasedPressure = incomeReduction > 0 ? monthlyGap * crisisDurationMonths : 0;
-  const expenseBasedPressure = totalLumpSum + additionalMonthlyExpense * crisisDurationMonths;
-  const totalAdditionalExpense = Math.max(incomeBasedPressure, expenseBasedPressure);
+  // Peak monthlyGap * max(duration) incorrectly extends short shocks across the
+  // longest event (e.g. 3mo job loss + 12mo medical → 12× peak gap). Count each
+  // shock only for its own horizon instead.
+  const totalAdditionalExpense = calculateDurationAwarePressure(
+    profile,
+    scenario,
+    baselineBurn,
+  );
 
   return {
     baselineMonthlyBurn: baselineBurn,
