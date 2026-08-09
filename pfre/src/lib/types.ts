@@ -122,6 +122,13 @@ export interface StressResult {
   depletionTimeline: MonthProjection[];
   additionalExpense: number;      // total lump sum / added expenses
   crisisDurationMonths: number;   // effective planning horizon (unknown → 6)
+  /**
+   * Monthly dollars that continue during the crisis on top of baseline living
+   * expenses: expense-shock installments + structural lifestyle inflation.
+   * Plan projections and post-plan gap checks must include this; it is not
+   * represented inside monthlyReallocation (which only reallocates baseline buckets).
+   */
+  crisisMonthlyAddon?: number;
 }
 
 export interface MonthProjection {
