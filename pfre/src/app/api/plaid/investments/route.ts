@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import {
+  PLAID_TRANSACTIONS_PAGE_SIZE,
+  paginatePlaidTransactions,
+} from "@/lib/plaid-transactions";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -75,13 +79,26 @@ export async function POST(req: Request) {
       startDate.setDate(startDate.getDate() - 90);
       const endDate = new Date();
 
-      const txResponse = await plaidClient.investmentsTransactionsGet({
-        access_token,
-        start_date: startDate.toISOString().slice(0, 10),
-        end_date: endDate.toISOString().slice(0, 10),
-      });
+      const rawInvestmentTx = await paginatePlaidTransactions(
+        async (offset, count) => {
+          const txResponse = await plaidClient.investmentsTransactionsGet({
+            access_token,
+            start_date: startDate.toISOString().slice(0, 10),
+            end_date: endDate.toISOString().slice(0, 10),
+            options: { count, offset },
+          });
+          return {
+            transactions: txResponse.data.investment_transactions,
+            total_transactions: txResponse.data.total_investment_transactions,
+          };
+        },
+        {
+          pageSize: PLAID_TRANSACTIONS_PAGE_SIZE,
+          getTransactionId: (tx) => tx.investment_transaction_id,
+        },
+      );
 
-      investmentTransactions = txResponse.data.investment_transactions.map(tx => {
+      investmentTransactions = rawInvestmentTx.map(tx => {
         const security = tx.security_id ? securityMap.get(tx.security_id) : null;
         return {
           transactionId: tx.investment_transaction_id,
