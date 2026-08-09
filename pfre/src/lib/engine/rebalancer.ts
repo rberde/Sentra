@@ -8,6 +8,14 @@ import type {
 } from "@/lib/types";
 import { normalizeWeights } from "./risk-engine";
 
+function resolveCrisisMonthlyAddon(stress: StressResult): number {
+  if (typeof stress.crisisMonthlyAddon === "number" && Number.isFinite(stress.crisisMonthlyAddon)) {
+    return Math.max(0, stress.crisisMonthlyAddon);
+  }
+  // Legacy stress results: derive the forced add-on from adjusted vs baseline burn.
+  return Math.max(0, stress.adjustedMonthlyBurn - stress.baselineMonthlyBurn);
+}
+
 function projectMonth(
   startCash: number,
   startSavings: number,
@@ -16,6 +24,7 @@ function projectMonth(
   reallocation: BucketReallocation,
   months: number,
   investmentGrowthRate: number = 0.005,
+  crisisMonthlyAddon: number = 0,
 ): MonthProjection {
   let cash = startCash;
   let savings = startSavings;
@@ -23,7 +32,10 @@ function projectMonth(
   let cumExpenses = 0;
 
   for (let m = 0; m < months; m++) {
-    const totalExpenses = reallocation.fixedExpenses + reallocation.variableExpenses;
+    // monthlyReallocation only covers baseline living buckets. Expense-shock
+    // installments and structural lifestyle inflation must be applied on top.
+    const totalExpenses =
+      reallocation.fixedExpenses + reallocation.variableExpenses + crisisMonthlyAddon;
     cumExpenses += totalExpenses;
 
     cash += monthlyIncome - totalExpenses - reallocation.investments - reallocation.savingsGoal + reallocation.cashBuffer;
@@ -53,13 +65,17 @@ function buildPlan(
   description: string,
 ): RebalancingPlan {
   const effectiveIncome = stress.adjustedIncome;
+  const crisisMonthlyAddon = resolveCrisisMonthlyAddon(stress);
 
   const freeablePerMonth = (
     stress.constraintMap.softConstraints - reallocation.variableExpenses +
     stress.constraintMap.pausable - reallocation.investments +
     stress.constraintMap.redirectable - reallocation.savingsGoal
   );
-  const monthlyGap = Math.max(0, reallocation.fixedExpenses + reallocation.variableExpenses - effectiveIncome);
+  const monthlyGap = Math.max(
+    0,
+    reallocation.fixedExpenses + reallocation.variableExpenses + crisisMonthlyAddon - effectiveIncome,
+  );
   const totalPressure = stress.additionalExpense > 0 ? stress.additionalExpense : monthlyGap * stress.crisisDurationMonths;
   const timelineToResolve = freeablePerMonth > 0 && totalPressure > 0
     ? Math.ceil(totalPressure / freeablePerMonth)
@@ -98,9 +114,9 @@ function buildPlan(
       lifestyleReduction: Math.max(0, lifestyleReduction),
     },
     projections: {
-      month6: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 6, growthRate),
-      month12: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 12, growthRate),
-      month24: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 24, growthRate),
+      month6: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 6, growthRate, crisisMonthlyAddon),
+      month12: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 12, growthRate, crisisMonthlyAddon),
+      month24: projectMonth(profile.cashBuffer, savingsBalance, stress.portfolioStressValue, effectiveIncome, reallocation, 24, growthRate, crisisMonthlyAddon),
     },
     tradeoffSummary: description,
   };

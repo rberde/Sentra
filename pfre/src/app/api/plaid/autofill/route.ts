@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import {
+  PLAID_TRANSACTIONS_PAGE_SIZE,
+  paginatePlaidTransactions,
+} from "@/lib/plaid-transactions";
 
 const config = new Configuration({
   basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
@@ -41,9 +45,9 @@ export async function POST(req: Request) {
     let expensesReason = "Imported from Plaid transactions.";
 
     try {
-      const txResponse = await getTransactionsWithRetry(access_token, startDate, endDate);
+      const transactions = await getTransactionsWithRetry(access_token, startDate, endDate);
 
-      const estimates = buildExpenseEstimates(txResponse.data.transactions);
+      const estimates = buildExpenseEstimates(transactions);
       fixedExpenses = estimates.fixedExpenses;
       variableExpenses = estimates.variableExpenses;
     } catch (txError) {
@@ -117,11 +121,24 @@ async function getTransactionsWithRetry(accessToken: string, startDate: Date, en
   const maxAttempts = 4;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      return await plaidClient.transactionsGet({
-        access_token: accessToken,
-        start_date: toPlaidDate(startDate),
-        end_date: toPlaidDate(endDate),
-      });
+      return await paginatePlaidTransactions(
+        async (offset, count) => {
+          const response = await plaidClient.transactionsGet({
+            access_token: accessToken,
+            start_date: toPlaidDate(startDate),
+            end_date: toPlaidDate(endDate),
+            options: { count, offset },
+          });
+          return {
+            transactions: response.data.transactions,
+            total_transactions: response.data.total_transactions,
+          };
+        },
+        {
+          pageSize: PLAID_TRANSACTIONS_PAGE_SIZE,
+          getTransactionId: (tx) => tx.transaction_id,
+        },
+      );
     } catch (error) {
       const errorCode = (error as { response?: { data?: { error_code?: string } } })?.response?.data?.error_code;
       const shouldRetry = errorCode === "PRODUCT_NOT_READY" && attempt < maxAttempts - 1;

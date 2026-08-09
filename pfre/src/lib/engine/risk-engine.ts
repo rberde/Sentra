@@ -120,7 +120,10 @@ export function simulateRiskBucket(
   }
 
   const adjustedIncome = Math.max(0, profile.monthlyIncome - incomeReduction);
-  const adjustedBurn = baselineBurn + additionalMonthlyExpense + monthlyExpenseIncrease;
+  // Forced monthly crisis dollars beyond baseline living expenses. These are NOT
+  // part of monthlyReallocation buckets, so plan projections must add them back.
+  const crisisMonthlyAddon = additionalMonthlyExpense + monthlyExpenseIncrease;
+  const adjustedBurn = baselineBurn + crisisMonthlyAddon;
   const monthlyDeficit = adjustedBurn - adjustedIncome;
   const stressedPortfolio = Math.max(0, profile.investments.totalValue - portfolioLoss);
 
@@ -175,6 +178,20 @@ export function simulateRiskBucket(
     cashBuffer: liquidityPool,
     investments: { ...profile.investments, totalValue: stressedPortfolio },
     monthlyIncome: adjustedIncome,
+    // Reflect installment / lifestyle-inflation burn in the stressed risk score.
+    // Without this, structural_drift (and post-#47 expense shocks) can leave the
+    // score unchanged even while adjustedMonthlyBurn is materially higher.
+    variableExpenses: crisisMonthlyAddon > 0
+      ? [
+          ...profile.variableExpenses,
+          {
+            name: "Crisis expense pressure",
+            amount: crisisMonthlyAddon,
+            category: "other",
+            type: "variable",
+          },
+        ]
+      : profile.variableExpenses,
   };
   const stressedRisk = calculateBaselineRisk(stressedProfile);
 
@@ -201,5 +218,6 @@ export function simulateRiskBucket(
     depletionTimeline: timeline,
     additionalExpense: totalAdditionalExpense,
     crisisDurationMonths,
+    crisisMonthlyAddon,
   };
 }
