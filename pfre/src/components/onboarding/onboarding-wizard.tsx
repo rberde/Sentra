@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useApp } from "@/contexts/app-context";
 import { createDefaultProfile, suggestAllocation } from "@/lib/store";
+import { resolvePlaidInvestmentValue } from "@/lib/plaid-investments";
 import type { UserProfile, Expense, IncomeStream, PlaidAccount } from "@/lib/types";
 import { PlaidLinkButton, type PlaidExchangePayload } from "@/components/plaid/plaid-link-button";
 import { Button } from "@/components/ui/button";
@@ -250,11 +251,6 @@ export function OnboardingWizard() {
     const shouldSeedExamples = fixedLen + variableLen === 0;
     const fallback = createFallbackExpenseExamples(profile.monthlyIncome);
 
-    const holdingsTotal = (autofill.investmentHoldings ?? []).reduce((s, h) => s + h.value, 0);
-    const investmentValue = holdingsTotal > 0
-      ? holdingsTotal
-      : (typeof autofill.investmentsTotalValue === "number" ? autofill.investmentsTotalValue : 0);
-
     const loanLiabilities = (autofill.liabilities ?? []).filter(l => l.type === "student_loan");
     const loanExpenses: Expense[] = loanLiabilities
       .filter(l => l.minimumPayment && l.minimumPayment > 0)
@@ -267,12 +263,24 @@ export function OnboardingWizard() {
 
     const savingsAccount = (payload.accounts ?? []).find(a => a.type === "savings");
 
+    const investmentValue = resolvePlaidInvestmentValue({
+      investmentHoldings: autofill.investmentHoldings,
+      investmentsTotalValue: autofill.investmentsTotalValue,
+      accounts: payload.accounts,
+      previousTotalValue: profile.investments.totalValue,
+    });
+
     setProfile(prev => ({
       ...prev,
       cashBuffer: typeof autofill.cashBuffer === "number" ? autofill.cashBuffer : prev.cashBuffer,
       investments: {
         ...prev.investments,
-        totalValue: investmentValue > 0 ? investmentValue : prev.investments.totalValue,
+        totalValue: resolvePlaidInvestmentValue({
+          investmentHoldings: autofill.investmentHoldings,
+          investmentsTotalValue: autofill.investmentsTotalValue,
+          accounts: payload.accounts,
+          previousTotalValue: prev.investments.totalValue,
+        }),
         monthlyContribution: prev.investments.monthlyContribution || 750,
       },
       fixedExpenses: prev.fixedExpenses.length === 0
@@ -312,8 +320,13 @@ export function OnboardingWizard() {
     if (fixedLen + variableLen > 0) {
       parts.push(`${fixedLen} fixed and ${variableLen} variable expenses`);
     }
-    if ((autofill.investmentHoldings?.length ?? 0) > 0) {
-      parts.push(`${autofill.investmentHoldings!.length} investment holdings ($${investmentValue.toLocaleString()})`);
+    if ((autofill.investmentHoldings?.length ?? 0) > 0 || investmentValue > 0) {
+      const holdingCount = autofill.investmentHoldings?.length ?? 0;
+      parts.push(
+        holdingCount > 0
+          ? `${holdingCount} investment holdings ($${investmentValue.toLocaleString()})`
+          : `investment portfolio ($${investmentValue.toLocaleString()})`,
+      );
     }
     if ((autofill.liabilities?.length ?? 0) > 0) {
       parts.push(`${autofill.liabilities!.length} liabilities`);
@@ -326,7 +339,7 @@ export function OnboardingWizard() {
 
     setPlaidSnapshot({
       cashBuffer: typeof autofill.cashBuffer === "number" ? autofill.cashBuffer : profile.cashBuffer,
-      investmentsTotalValue: investmentValue > 0 ? investmentValue : profile.investments.totalValue,
+      investmentsTotalValue: investmentValue,
     });
 
     setPlaidApplied(true);
