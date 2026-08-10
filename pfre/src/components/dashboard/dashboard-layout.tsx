@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useApp } from "@/contexts/app-context";
 import { useToast } from "@/contexts/toast-context";
 import { runAgentChecks } from "@/lib/engine/agent-checks";
+import { resolvePlaidInvestmentValue } from "@/lib/plaid-investments";
 import type { Expense } from "@/lib/types";
 import { FinancialSnapshot } from "./financial-snapshot";
 import { AllocationEditor } from "./allocation-editor";
@@ -111,11 +112,17 @@ export function DashboardLayout() {
       if (typeof autofill.cashBuffer === "number") updatedProfile.cashBuffer = autofill.cashBuffer;
       if (autofill.fixedExpenses?.length) updatedProfile.fixedExpenses = autofill.fixedExpenses as Expense[];
       if (autofill.variableExpenses?.length) updatedProfile.variableExpenses = autofill.variableExpenses as Expense[];
-      const holdingsTotal = (autofill.investmentHoldings ?? []).reduce(
-        (s: number, h: { value: number }) => s + h.value, 0
-      );
-      if (holdingsTotal > 0) {
-        updatedProfile.investments = { ...updatedProfile.investments, totalValue: holdingsTotal };
+      const investmentValue = resolvePlaidInvestmentValue({
+        investmentHoldings: autofill.investmentHoldings,
+        investmentsTotalValue: autofill.investmentsTotalValue,
+        accounts: data.accounts,
+        previousTotalValue: state.profile.investments.totalValue,
+      });
+      if (investmentValue !== state.profile.investments.totalValue) {
+        updatedProfile.investments = {
+          ...updatedProfile.investments,
+          totalValue: investmentValue,
+        };
       }
 
       dispatch({ type: "SET_PROFILE", profile: updatedProfile });
