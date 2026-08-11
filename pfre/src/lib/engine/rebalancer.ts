@@ -44,6 +44,42 @@ function projectMonth(
   };
 }
 
+type CutBucket = "variable" | "pause" | "redirect";
+
+/** Apply a cut waterfall, clamping each bucket to remaining capacity. */
+function allocateCuts(
+  amountNeeded: number,
+  softConstraints: number,
+  pausable: number,
+  redirectable: number,
+  steps: Array<{ bucket: CutBucket; maxFraction?: number }>,
+): { variableCut: number; pauseCut: number; redirectCut: number } {
+  let remaining = Math.max(0, amountNeeded);
+  let variableCut = 0;
+  let pauseCut = 0;
+  let redirectCut = 0;
+
+  for (const step of steps) {
+    if (remaining <= 0) break;
+    if (step.bucket === "variable") {
+      const cap = softConstraints * (step.maxFraction ?? 1);
+      const cut = Math.min(Math.max(0, cap - variableCut), remaining);
+      variableCut += cut;
+      remaining -= cut;
+    } else if (step.bucket === "pause") {
+      const cut = Math.min(Math.max(0, pausable - pauseCut), remaining);
+      pauseCut += cut;
+      remaining -= cut;
+    } else {
+      const cut = Math.min(Math.max(0, redirectable - redirectCut), remaining);
+      redirectCut += cut;
+      remaining -= cut;
+    }
+  }
+
+  return { variableCut, pauseCut, redirectCut };
+}
+
 function buildPlan(
   type: PlanType,
   name: string,
@@ -61,9 +97,21 @@ function buildPlan(
   );
   const monthlyGap = Math.max(0, reallocation.fixedExpenses + reallocation.variableExpenses - effectiveIncome);
   const totalPressure = stress.additionalExpense > 0 ? stress.additionalExpense : monthlyGap * stress.crisisDurationMonths;
-  const timelineToResolve = freeablePerMonth > 0 && totalPressure > 0
-    ? Math.ceil(totalPressure / freeablePerMonth)
-    : monthlyGap > 0 ? stress.crisisDurationMonths : 0;
+  const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
+  const availableLiquidity = profile.cashBuffer + savingsBalance;
+
+  // If the plan still runs a monthly expense deficit, cuts cannot "resolve" the crisis —
+  // report runway against the remaining gap instead of inventing a freeable-based timeline.
+  let timelineToResolve: number;
+  if (monthlyGap > 0) {
+    timelineToResolve = availableLiquidity > 0
+      ? Math.ceil(availableLiquidity / monthlyGap)
+      : 0;
+  } else if (freeablePerMonth > 0 && totalPressure > 0) {
+    timelineToResolve = Math.ceil(totalPressure / freeablePerMonth);
+  } else {
+    timelineToResolve = 0;
+  }
 
   const originalMonthlyInvContrib = profile.investments.monthlyContribution;
   const originalMonthlySavContrib = profile.savingsGoal?.monthlyContribution ?? 0;
@@ -83,7 +131,6 @@ function buildPlan(
     : 0;
 
   const growthRate = stress.portfolioStressValue < profile.investments.totalValue ? 0 : 0.005;
-  const savingsBalance = profile.savingsGoal?.currentBalance ?? 0;
 
   return {
     id: `plan_${type}_${Date.now()}`,
@@ -124,30 +171,38 @@ export function generateRebalancingPlans(
   const rawNeeded = Math.max(recurringGap, lumpSumPressure);
   const maxFlexible = cm.softConstraints + cm.pausable + cm.redirectable;
   const amountNeeded = Math.max(0, Math.min(rawNeeded, maxFlexible));
-  const isUnknownDuration = stress.crisisDurationMonths <= 6 && rawNeeded > 0;
 
   const formatDollars = (n: number) => `$${Math.round(n).toLocaleString()}`;
   const hasIncomeShock = stress.adjustedIncome < profile.monthlyIncome;
-  const remainingGap = Math.max(0, rawNeeded - amountNeeded);
   const durationLabel = stress.crisisDurationMonths <= 6
     ? `${stress.crisisDurationMonths}-month planning horizon`
     : `${stress.crisisDurationMonths} months`;
-  const cashRunwayNote = remainingGap > 0 && profile.cashBuffer > 0
-    ? ` Even after cuts, there's a ${formatDollars(remainingGap)}/mo shortfall that draws from your cash reserve (${Math.round(profile.cashBuffer / remainingGap)} months of runway).`
-    : "";
+  const liquidity = profile.cashBuffer + (profile.savingsGoal?.currentBalance ?? 0);
+  const shortfallNote = (monthlyShortfall: number) =>
+    monthlyShortfall > 0 && liquidity > 0
+      ? ` Even after cuts, there's a ${formatDollars(monthlyShortfall)}/mo shortfall that draws from your cash reserve (${Math.round(liquidity / monthlyShortfall)} months of runway).`
+      : monthlyShortfall > 0
+        ? ` Even after cuts, there's a ${formatDollars(monthlyShortfall)}/mo shortfall and no cash reserve left to cover it.`
+        : "";
 
-  // ── Plan 1: Maximize Lifestyle ──
-  const lifestylePausable = Math.min(cm.pausable, amountNeeded);
-  const lifestyleRedirectable = Math.min(cm.redirectable, Math.max(0, amountNeeded - lifestylePausable));
-  const lifestyleVariableCut = Math.max(0, amountNeeded - lifestylePausable - lifestyleRedirectable);
-
-  const lifestylePlan: BucketReallocation = {
+  const toReallocation = (cuts: { variableCut: number; pauseCut: number; redirectCut: number }): BucketReallocation => ({
     fixedExpenses: cm.hardConstraints,
-    variableExpenses: Math.max(0, cm.softConstraints - lifestyleVariableCut),
-    investments: Math.max(0, cm.pausable - lifestylePausable),
-    savingsGoal: Math.max(0, cm.redirectable - lifestyleRedirectable),
+    variableExpenses: Math.max(0, cm.softConstraints - cuts.variableCut),
+    investments: Math.max(0, cm.pausable - cuts.pauseCut),
+    savingsGoal: Math.max(0, cm.redirectable - cuts.redirectCut),
     cashBuffer: 0,
-  };
+  });
+
+  const planShortfall = (reallocation: BucketReallocation) =>
+    Math.max(0, reallocation.fixedExpenses + reallocation.variableExpenses - stress.adjustedIncome);
+
+  // ── Plan 1: Maximize Lifestyle — pause/redirect first, cut variable last ──
+  const lifestyleCuts = allocateCuts(amountNeeded, cm.softConstraints, cm.pausable, cm.redirectable, [
+    { bucket: "pause" },
+    { bucket: "redirect" },
+    { bucket: "variable", maxFraction: 1 },
+  ]);
+  const lifestylePlan = toReallocation(lifestyleCuts);
 
   const plans: RebalancingPlan[] = [
     buildPlan(
@@ -156,22 +211,19 @@ export function generateRebalancingPlans(
       profile,
       stress,
       lifestylePlan,
-      `${hasIncomeShock ? `During your income disruption (${durationLabel}), this plan ` : "This plan "}keeps your lifestyle as close to normal as possible by pausing ${formatDollars(lifestylePausable)}/month in investment contributions${lifestyleRedirectable > 0 ? ` and redirecting ${formatDollars(lifestyleRedirectable)}/month from your savings goal` : ""}. Variable spending stays at ${formatDollars(lifestylePlan.variableExpenses)}/month (${cm.softConstraints > 0 ? Math.round((lifestylePlan.variableExpenses / cm.softConstraints) * 100) : 100}% of current). ${lifestylePlan.investments === 0 ? "Investment contributions pause entirely." : `Investments continue at ${formatDollars(lifestylePlan.investments)}/month.`}${cashRunwayNote}${hasIncomeShock ? " Best if you expect to recover income within a few months." : ""}`,
+      `${hasIncomeShock ? `During your income disruption (${durationLabel}), this plan ` : "This plan "}keeps your lifestyle as close to normal as possible by pausing ${formatDollars(lifestyleCuts.pauseCut)}/month in investment contributions${lifestyleCuts.redirectCut > 0 ? ` and redirecting ${formatDollars(lifestyleCuts.redirectCut)}/month from your savings goal` : ""}. Variable spending stays at ${formatDollars(lifestylePlan.variableExpenses)}/month (${cm.softConstraints > 0 ? Math.round((lifestylePlan.variableExpenses / cm.softConstraints) * 100) : 100}% of current). ${lifestylePlan.investments === 0 ? "Investment contributions pause entirely." : `Investments continue at ${formatDollars(lifestylePlan.investments)}/month.`}${shortfallNote(planShortfall(lifestylePlan))}${hasIncomeShock ? " Best if you expect to recover income within a few months." : ""}`,
     ),
   ];
 
   // ── Plan 2: Maximize Investment Discipline ──
-  const investVariableCut = Math.min(cm.softConstraints * 0.6, amountNeeded);
-  const investRedirectable = Math.min(cm.redirectable, Math.max(0, amountNeeded - investVariableCut));
-  const investPausable = Math.max(0, amountNeeded - investVariableCut - investRedirectable);
-
-  const investPlan: BucketReallocation = {
-    fixedExpenses: cm.hardConstraints,
-    variableExpenses: Math.max(0, cm.softConstraints - investVariableCut),
-    investments: Math.max(0, cm.pausable - investPausable),
-    savingsGoal: Math.max(0, cm.redirectable - investRedirectable),
-    cashBuffer: 0,
-  };
+  // Prefer lifestyle cuts (up to 60%, then deeper) and savings redirects before pausing investments.
+  const investCuts = allocateCuts(amountNeeded, cm.softConstraints, cm.pausable, cm.redirectable, [
+    { bucket: "variable", maxFraction: 0.6 },
+    { bucket: "redirect" },
+    { bucket: "variable", maxFraction: 1 },
+    { bucket: "pause" },
+  ]);
+  const investPlan = toReallocation(investCuts);
 
   plans.push(
     buildPlan(
@@ -180,24 +232,26 @@ export function generateRebalancingPlans(
       profile,
       stress,
       investPlan,
-      `${hasIncomeShock ? `Over the ${durationLabel}, this plan ` : "This plan "}keeps your investments on track by cutting variable spending from ${formatDollars(cm.softConstraints)} to ${formatDollars(investPlan.variableExpenses)}/month${investRedirectable > 0 ? ` and redirecting ${formatDollars(investRedirectable)}/month from your savings goal` : ""}. Investments continue at ${formatDollars(investPlan.investments)}/month. Lifestyle impact is significant during the crisis.${cashRunwayNote}${hasIncomeShock ? " Best if you want to maintain long-term growth even during the disruption." : ""}`,
+      `${hasIncomeShock ? `Over the ${durationLabel}, this plan ` : "This plan "}keeps your investments on track by cutting variable spending from ${formatDollars(cm.softConstraints)} to ${formatDollars(investPlan.variableExpenses)}/month${investCuts.redirectCut > 0 ? ` and redirecting ${formatDollars(investCuts.redirectCut)}/month from your savings goal` : ""}. Investments continue at ${formatDollars(investPlan.investments)}/month. Lifestyle impact is significant during the crisis.${shortfallNote(planShortfall(investPlan))}${hasIncomeShock ? " Best if you want to maintain long-term growth even during the disruption." : ""}`,
     ),
   );
 
   // ── Plan 3: Savings-goal priority OR fastest risk payoff ──
-  const savingsPausable = Math.min(cm.pausable, amountNeeded);
-  const savingsVariableCut = hasSavingsGoal
-    ? Math.min(cm.softConstraints * 0.4, Math.max(0, amountNeeded - savingsPausable))
-    : Math.min(cm.softConstraints * 0.8, Math.max(0, amountNeeded - savingsPausable));
-  const savingsRedirectable = Math.max(0, amountNeeded - savingsPausable - savingsVariableCut);
-
-  const savingsPlan: BucketReallocation = {
-    fixedExpenses: cm.hardConstraints,
-    variableExpenses: Math.max(0, cm.softConstraints - savingsVariableCut),
-    investments: Math.max(0, cm.pausable - savingsPausable),
-    savingsGoal: Math.max(0, cm.redirectable - savingsRedirectable),
-    cashBuffer: 0,
-  };
+  // Protect savings contributions: pause investments and deepen variable cuts before redirecting.
+  // Maximum Survival (no savings goal) may cut 100% of variable spend.
+  const savingsCuts = allocateCuts(amountNeeded, cm.softConstraints, cm.pausable, cm.redirectable, hasSavingsGoal
+    ? [
+        { bucket: "pause" },
+        { bucket: "variable", maxFraction: 0.4 },
+        { bucket: "variable", maxFraction: 1 },
+        { bucket: "redirect" },
+      ]
+    : [
+        { bucket: "pause" },
+        { bucket: "variable", maxFraction: 1 },
+        { bucket: "redirect" },
+      ]);
+  const savingsPlan = toReallocation(savingsCuts);
 
   plans.push(
     buildPlan(
@@ -209,21 +263,25 @@ export function generateRebalancingPlans(
       stress,
       savingsPlan,
       hasSavingsGoal
-        ? `${hasIncomeShock ? `For a sustained income loss (${durationLabel}+), this plan ` : "This plan "}keeps your savings goal "${profile.savingsGoal!.name}" on track by pausing ${formatDollars(savingsPausable)}/month in investments and cutting variable spending to ${formatDollars(savingsPlan.variableExpenses)}/month. Savings contributions continue at ${formatDollars(savingsPlan.savingsGoal)}/month.${cashRunwayNote}${hasIncomeShock ? " Best if you want to stay on track for your goal even through a tough period." : ""}`
-        : `${hasIncomeShock ? `For a prolonged income loss (${durationLabel}+), this plan ` : "This plan "}makes the most aggressive cuts: variable spending down to ${formatDollars(savingsPlan.variableExpenses)}/month, investments paused by ${formatDollars(savingsPausable)}/month. Maximizes cash preservation and extends your runway as long as possible.${cashRunwayNote}${hasIncomeShock ? " Best if you need to stretch every dollar until you're back on your feet." : ""}`,
+        ? `${hasIncomeShock ? `For a sustained income loss (${durationLabel}+), this plan ` : "This plan "}keeps your savings goal "${profile.savingsGoal!.name}" on track by pausing ${formatDollars(savingsCuts.pauseCut)}/month in investments and cutting variable spending to ${formatDollars(savingsPlan.variableExpenses)}/month. Savings contributions continue at ${formatDollars(savingsPlan.savingsGoal)}/month.${shortfallNote(planShortfall(savingsPlan))}${hasIncomeShock ? " Best if you want to stay on track for your goal even through a tough period." : ""}`
+        : `${hasIncomeShock ? `For a prolonged income loss (${durationLabel}+), this plan ` : "This plan "}makes the most aggressive cuts: variable spending down to ${formatDollars(savingsPlan.variableExpenses)}/month, investments paused by ${formatDollars(savingsCuts.pauseCut)}/month. Maximizes cash preservation and extends your runway as long as possible.${shortfallNote(planShortfall(savingsPlan))}${hasIncomeShock ? " Best if you need to stretch every dollar until you're back on your feet." : ""}`,
     ),
   );
 
-  // ── Recommend best plan based on goal weights ──
+  // ── Recommend: prefer plans that close the monthly expense gap, then goal weights ──
   const weightMap: Record<PlanType, number> = {
     maximize_lifestyle: weights.lifestyle,
     maximize_investments: weights.investmentDiscipline,
     maximize_savings_goal: weights.savingsGoal,
   };
 
-  let bestScore = -1;
+  const anyFeasible = plans.some(p => planShortfall(p.monthlyReallocation) === 0);
+  const topWeight = Math.max(...plans.map(p => weightMap[p.type] ?? 0));
+  let bestScore = -Infinity;
   let bestPlanId = plans[0].id;
   for (const plan of plans) {
+    const feasible = planShortfall(plan.monthlyReallocation) === 0;
+    if (anyFeasible && !feasible) continue;
     const score = weightMap[plan.type] ?? 0;
     if (score > bestScore) {
       bestScore = score;
@@ -231,15 +289,25 @@ export function generateRebalancingPlans(
     }
   }
 
-  return plans.map(p => ({
-    ...p,
-    isRecommended: p.id === bestPlanId,
-    recommendationReason: p.id === bestPlanId
-      ? `Recommended based on your goal weights — your highest priority is ${
-          p.type === "maximize_lifestyle" ? "maintaining your lifestyle"
-          : p.type === "maximize_investments" ? "investment discipline"
-          : hasSavingsGoal ? `reaching your savings goal "${profile.savingsGoal?.name}"` : "paying down risk quickly"
-        }.`
-      : undefined,
-  }));
+  return plans.map(p => {
+    const isRecommended = p.id === bestPlanId;
+    if (!isRecommended) return { ...p, isRecommended: false, recommendationReason: undefined };
+
+    const choseFeasibleOverHigherWeight =
+      anyFeasible &&
+      planShortfall(p.monthlyReallocation) === 0 &&
+      (weightMap[p.type] ?? 0) < topWeight;
+
+    return {
+      ...p,
+      isRecommended: true,
+      recommendationReason: choseFeasibleOverHigherWeight
+        ? "Recommended because it closes your monthly budget gap — higher-priority plans still leave a shortfall under this shock."
+        : `Recommended based on your goal weights — your highest priority is ${
+            p.type === "maximize_lifestyle" ? "maintaining your lifestyle"
+            : p.type === "maximize_investments" ? "investment discipline"
+            : hasSavingsGoal ? `reaching your savings goal "${profile.savingsGoal?.name}"` : "paying down risk quickly"
+          }.`,
+    };
+  });
 }
