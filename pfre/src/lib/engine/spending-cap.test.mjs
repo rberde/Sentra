@@ -80,3 +80,63 @@ test("server usage helper alerts on $0 cap without divide-by-zero", () => {
     { variableCap: 2000, percentUsed: 125, alert: true },
   );
 });
+
+test("full income shock lifestyle plan zeros variable budget and breaches on current spend", async () => {
+  const { readFileSync, writeFileSync, unlinkSync } = await import("node:fs");
+  const { dirname, join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+
+  const rebalancerSrc = readFileSync(join(__dirname, "rebalancer.ts"), "utf8").replace(
+    'from "./risk-engine"',
+    'from "./risk-engine.ts"',
+  );
+  const riskSrc = readFileSync(join(__dirname, "risk-engine.ts"), "utf8");
+  const tmpRebalancer = join(__dirname, ".rebalancer.spending-cap.tmp.ts");
+  const tmpRisk = join(__dirname, ".risk-engine.spending-cap.tmp.ts");
+  writeFileSync(tmpRebalancer, rebalancerSrc);
+  writeFileSync(tmpRisk, riskSrc);
+
+  try {
+    const { simulateRiskBucket } = await import(tmpRisk);
+    const { generateRebalancingPlans } = await import(tmpRebalancer);
+
+    const profile = {
+      id: "u1",
+      name: "Test",
+      monthlyIncome: 5000,
+      incomeStreams: [{ name: "Salary", amount: 5000, type: "fixed" }],
+      fixedExpenses: [{ name: "Rent", amount: 2000, category: "housing", type: "fixed" }],
+      variableExpenses: [
+        { name: "Food", amount: 800, category: "food", type: "variable" },
+        { name: "Fun", amount: 400, category: "entertainment", type: "variable" },
+      ],
+      investments: { totalValue: 10000, monthlyContribution: 500 },
+      savingsGoal: null,
+      cashBuffer: 5000,
+      allocation: { fixedExpenses: 40, variableExpenses: 24, investments: 10, savingsGoal: 0, cashBuffer: 26 },
+      goalWeights: { lifestyle: 10, savingsGoal: 3, investmentDiscipline: 3 },
+      createdAt: "2026-01-01",
+      updatedAt: "2026-01-01",
+    };
+
+    const stress = simulateRiskBucket(profile, {
+      events: [{ id: "e1", type: "income_shock", name: "Job loss", severity: 100, duration: 6, isActive: true }],
+    });
+    const lifestyle = generateRebalancingPlans(profile, stress)
+      .find((p) => p.type === "maximize_lifestyle");
+
+    assert.equal(lifestyle.monthlyReallocation.variableExpenses, 0);
+    assert.deepEqual(
+      evaluateSpendingCapBreach({
+        planBudget: lifestyle.monthlyReallocation.variableExpenses,
+        actualSpending: 1200,
+        thresholdPct: 100,
+      }),
+      { overByPct: null, severity: "urgent" },
+    );
+  } finally {
+    unlinkSync(tmpRebalancer);
+    unlinkSync(tmpRisk);
+  }
+});
