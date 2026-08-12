@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { calculateSpendingCapUsage } from "@/lib/engine/spending-cap";
 import { readServerState } from "@/lib/server-state";
 
 /**
@@ -56,18 +57,26 @@ export async function GET(req: Request) {
 
   // 1. Spending check
   if (shouldRun("spending") && activePlan && reallocation) {
-    const variableCap = Math.round(income * (reallocation.variableExpenses ?? 20) / 100);
-    const percentUsed = variableCap > 0 ? Math.round((totalVariable / variableCap) * 100) : 0;
+    // monthlyReallocation buckets are dollar amounts (not % of income).
+    const planBudget = typeof reallocation.variableExpenses === "number"
+      ? reallocation.variableExpenses
+      : 0;
     const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
     const threshold = (spendingRule?.threshold as number) ?? 100;
-    const fired = percentUsed >= threshold;
+    const { variableCap, percentUsed, alert: fired } = calculateSpendingCapUsage({
+      planBudget,
+      actualSpending: totalVariable,
+      thresholdPct: threshold,
+    });
     alerts.push({
       check: "spending",
       alert: fired,
-      severity: fired ? (percentUsed >= 120 ? "critical" : "warning") : "info",
+      severity: fired ? (percentUsed >= 120 || variableCap <= 0 ? "critical" : "warning") : "info",
       title: "Spending Monitor",
       message: fired
-        ? `Variable spending at ${percentUsed}% of plan cap ($${totalVariable} / $${variableCap}).`
+        ? variableCap <= 0
+          ? `Variable spending $${totalVariable} with a $0 plan cap.`
+          : `Variable spending at ${percentUsed}% of plan cap ($${totalVariable} / $${variableCap}).`
         : `Spending within budget at ${percentUsed}%.`,
       data: { variableCap, actualSpending: totalVariable, percentUsed, threshold },
     });

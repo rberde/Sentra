@@ -1,5 +1,9 @@
 import type { AppState } from "@/lib/store";
 import type { Notification, NotificationRule } from "@/lib/types";
+import {
+  evaluateSpendingCapBreach,
+  formatSpendingCapMessage,
+} from "@/lib/engine/spending-cap";
 
 /**
  * Evaluates all enabled notification rules against the current app state.
@@ -65,21 +69,22 @@ function evaluateRule(rule: NotificationRule, ctx: EvalContext): Notification | 
 function checkSpendingCap(rule: NotificationRule, ctx: EvalContext): Notification | null {
   if (!ctx.activePlan) return null;
   const planBudget = ctx.activePlan.monthlyReallocation.variableExpenses;
-  if (planBudget <= 0) return null;
-
   const actualSpending = ctx.totalVariable;
   const thresholdPct = rule.threshold ?? 100;
-  const cap = planBudget * (thresholdPct / 100);
 
-  if (actualSpending <= cap) return null;
+  const breach = evaluateSpendingCapBreach({
+    planBudget,
+    actualSpending,
+    thresholdPct,
+  });
+  if (!breach) return null;
 
-  const overBy = Math.round(((actualSpending - planBudget) / planBudget) * 100);
   return {
     id: crypto.randomUUID(),
     type: "spending_limit",
     title: "Spending Alert",
-    message: `Your variable spending ($${actualSpending.toLocaleString()}/mo) is ${overBy}% over your plan budget of $${planBudget.toLocaleString()}/mo. Consider reviewing your spending or adjusting your plan.`,
-    severity: overBy > 50 ? "urgent" : "warning",
+    message: formatSpendingCapMessage(actualSpending, planBudget, breach),
+    severity: breach.severity,
     isDismissed: false,
     createdAt: new Date().toISOString(),
   };

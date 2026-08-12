@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { calculateSpendingCapUsage } from "@/lib/engine/spending-cap";
 import { readServerState } from "@/lib/server-state";
 
 export async function GET() {
@@ -34,15 +35,20 @@ export async function GET() {
   const variableExpenses = (profile.variableExpenses as Array<{ amount: number }>) ?? [];
   const actualSpending = variableExpenses.reduce((s, e) => s + e.amount, 0);
   const reallocation = activePlan.monthlyReallocation as Record<string, number> | undefined;
-  const income = (profile.monthlyIncome as number) ?? 0;
-  const variableCap = reallocation ? Math.round(income * (reallocation.variableExpenses ?? 20) / 100) : 0;
-  const percentUsed = variableCap > 0 ? Math.round((actualSpending / variableCap) * 100) : 0;
+  // monthlyReallocation buckets are dollar amounts (not % of income).
+  const planBudget = typeof reallocation?.variableExpenses === "number"
+    ? reallocation.variableExpenses
+    : 0;
   const daysRemaining = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() - new Date().getDate();
 
   const rules = ((state.notificationSettings as Record<string, unknown>)?.rules as Array<Record<string, unknown>>) ?? [];
   const spendingRule = rules.find(r => r.type === "spending_cap" && r.enabled);
   const threshold = (spendingRule?.threshold as number) ?? 100;
-  const alert = percentUsed >= threshold;
+  const { variableCap, percentUsed, alert } = calculateSpendingCapUsage({
+    planBudget,
+    actualSpending,
+    thresholdPct: threshold,
+  });
 
   return NextResponse.json({
     status: "ok",
@@ -56,9 +62,11 @@ export async function GET() {
       thresholdPercent: threshold,
       daysRemainingInMonth: daysRemaining,
       alert,
-      alertLevel: alert ? (percentUsed >= 120 ? "critical" : "warning") : null,
+      alertLevel: alert ? (percentUsed >= 120 || variableCap <= 0 ? "critical" : "warning") : null,
       message: alert
-        ? `Variable spending at ${percentUsed}% of plan cap ($${actualSpending} / $${variableCap}).`
+        ? variableCap <= 0
+          ? `Variable spending $${actualSpending} with a $0 plan cap.`
+          : `Variable spending at ${percentUsed}% of plan cap ($${actualSpending} / $${variableCap}).`
         : `Variable spending within budget at ${percentUsed}%.`,
     },
   });
